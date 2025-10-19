@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from openai import OpenAI
 import os
 
-# Initialize OpenAI client
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 client = OpenAI(
@@ -13,28 +12,33 @@ client = OpenAI(
 
 app = FastAPI()
 
-# Define the request body
-class MessageRequest(BaseModel):
-    message: str
+class ImageRequest(BaseModel):
+    image_base64: str  # frontend sends base64
 
-@app.post("/chat")
-async def chat(request: MessageRequest):
+@app.post("/identify-food")
+async def identify_food(request: ImageRequest):
     try:
-        # Send message to LLM API following OpenRouter docs
+        # Send image to Gemini/Google multimodal model
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",  # optional
-                "X-Title": "NutriGuard",                  # optional
+                "X-Title": "NutriGuard",
             },
-            extra_body={},  # optional
-            model="meta-llama/llama-3.3-8b-instruct:free",
+            extra_body={},
+            model="google/gemini-2.0-flash-exp:free",
             messages=[
-                {"role": "user", "content": request.message}
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Identify the food in this image and give the exact name"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{request.image_base64}"}}
+                    ]
+                }
             ],
         )
 
         response_text = completion.choices[0].message.content
-        return {"response": response_text}
+        return {"food_name": response_text}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

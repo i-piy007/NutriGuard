@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 
 export default function Index() {
   const router = useRouter();
   const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleApiCall = async () => {
     if (!inputValue.trim()) {
@@ -12,30 +13,44 @@ export default function Index() {
       return;
     }
 
-    try {
-        const response = await fetch("https://nutriguard-n98n.onrender.com/chat", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: inputValue }), // matches backend model
-        });
+    setLoading(true); // show loading screen
 
+    try {
+      console.log("Sending request:", inputValue.slice(0, 3) + "...");
+
+      const response = await fetch("https://nutriguard-n98n.onrender.com/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: inputValue }),
+      });
+
+      console.log("Request sent. Awaiting response...");
 
       const data = await response.json();
-      console.log("Response:", data);
+
+      console.log("Received response:", JSON.stringify(data).slice(0, 3) + "...");
       Alert.alert("Success", JSON.stringify(data));
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching from backend:", error);
       Alert.alert("Error", "Could not reach the server!");
+    } finally {
+      setLoading(false); // hide loading screen
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#34C759" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to NutriGuard!</Text>
 
-      {/* ✅ Input Box */}
       <TextInput
         style={styles.input}
         placeholder="Enter food name..."
@@ -44,12 +59,10 @@ export default function Index() {
         onChangeText={setInputValue}
       />
 
-      {/* ✅ API Call Button */}
       <TouchableOpacity style={styles.apiButton} onPress={handleApiCall}>
         <Text style={styles.buttonText}>Send to Backend</Text>
       </TouchableOpacity>
 
-      {/* ✅ Camera Button */}
       <TouchableOpacity
         style={styles.cameraButton}
         onPress={() => router.push("/camera")}
@@ -102,5 +115,16 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f8f8",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 18,
+    color: "#555",
   },
 });
