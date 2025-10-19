@@ -22,10 +22,6 @@ async def chat(request: MessageRequest):
     try:
         # Send message to LLM API
         completion = client.chat.completions.create(
-            extra_headers={
-                "HTTP-Referer": "<YOUR_SITE_URL>",  # optional
-                "X-Title": "<YOUR_SITE_NAME>",      # optional
-            },
             model="meta-llama/llama-3.3-8b-instruct:free",
             messages=[
                 {"role": "user", "content": request.message}
