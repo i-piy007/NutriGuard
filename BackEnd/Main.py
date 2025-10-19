@@ -88,7 +88,7 @@ async def identify_food(request: ImageRequest):
                 "X-Title": "NutriGuard",
             },
             extra_body={},
-            model="google/gemini-2.0-flash-exp:free",
+            model="meta-llama/llama-4-maverick:free",
             messages=[
                 {
                     "role": "user",
