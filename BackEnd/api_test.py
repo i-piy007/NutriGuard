@@ -14,11 +14,22 @@ completion = client.chat.completions.create(
     "X-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai.
   },
   extra_body={},
-  model="meta-llama/llama-3.3-8b-instruct:free",
+  model="google/gemini-2.0-flash-exp:free",
   messages=[
     {
       "role": "user",
-      "content": "What is the meaning of life?"
+      "content": [
+        {
+          "type": "text",
+          "text": "What is in this image?"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+          }
+        }
+      ]
     }
   ]
 )
