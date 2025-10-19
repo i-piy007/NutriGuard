@@ -15,7 +15,7 @@ export default function Index() {
     try {
       // ⚠️ For physical device testing, use your computer’s IP instead of localhost
       // Example: http://192.168.1.5:8000/api/data
-      const response = await fetch("http://localhost:8000/api/data", {
+      const response = await fetch("http://localhost:8000/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
