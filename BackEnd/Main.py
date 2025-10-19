@@ -20,15 +20,21 @@ class MessageRequest(BaseModel):
 @app.post("/chat")
 async def chat(request: MessageRequest):
     try:
-        # Send message to LLM API
+        # Send message to LLM API following OpenRouter docs
         completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "http://localhost:8081",  # optional
+                "X-Title": "NutriGuard",                  # optional
+            },
+            extra_body={},  # optional
             model="meta-llama/llama-3.3-8b-instruct:free",
             messages=[
                 {"role": "user", "content": request.message}
-            ]
+            ],
         )
-        # Extract the assistant's response
+
         response_text = completion.choices[0].message.content
         return {"response": response_text}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

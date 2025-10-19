@@ -13,15 +13,14 @@ export default function Index() {
     }
 
     try {
-      // ⚠️ For physical device testing, use your computer’s IP instead of localhost
-      // Example: http://192.168.1.5:8000/api/data
-      const response = await fetch("https://nutriguard-n98n.onrender.com/chat", {
+        const response = await fetch("https://nutriguard-n98n.onrender.com/chat", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+            "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query: inputValue }),
-      });
+        body: JSON.stringify({ message: inputValue }), // matches backend model
+        });
+
 
       const data = await response.json();
       console.log("Response:", data);
