@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from "react-native";
 import { Camera, CameraView } from "expo-camera";
 
 export default function CameraScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
 
   // Request camera permission on mount
@@ -28,6 +29,7 @@ export default function CameraScreen() {
       console.log("Taking picture...");
       const photo = await cameraRef.current.takePictureAsync({ base64: false });
       console.log("Photo captured:", photo.uri.slice(0, 10) + "...");
+      setCapturedImage(photo.uri);
 
       // Prepare form data
       console.log("Preparing form data...");
@@ -39,26 +41,47 @@ export default function CameraScreen() {
       } as any);
       console.log("Form data prepared");
 
-      // Send to backend
-      console.log("Sending request to backend...");
-      const response = await fetch("https://nutriguard-n98n.onrender.com/upload", {
+      // First, upload the image to backend
+      console.log("Uploading image to backend...");
+      const uploadResponse = await fetch("https://nutriguard-n98n.onrender.com/upload", {
         method: "POST",
         body: formData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
       });
-      console.log("Response received, status:", response.status);
+      console.log("Upload response status:", uploadResponse.status);
 
-      const data = await response.json();
-      console.log("Response data:", JSON.stringify(data).slice(0, 50) + "...");
-      Alert.alert("Success", JSON.stringify(data));
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      const uploadData = await uploadResponse.json();
+      console.log("Upload response data:", uploadData);
+      const imageUrl = uploadData.image_url;
+
+      // Now, send the image URL to identify food
+      console.log("Identifying food with URL:", imageUrl);
+      const identifyResponse = await fetch("https://nutriguard-n98n.onrender.com/identify-food", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image_url: imageUrl }),
+      });
+      console.log("Identify response status:", identifyResponse.status);
+
+      if (!identifyResponse.ok) {
+        throw new Error(`Identify failed: ${identifyResponse.status}`);
+      }
+
+      const identifyData = await identifyResponse.json();
+      console.log("Identify response data:", identifyData);
+      Alert.alert("Success", `Food identified: ${identifyData.food_name}`);
 
     } catch (error) {
       console.error("Error in takePictureAndUpload:", error);
-      Alert.alert("Error", "Failed to upload image.");
+      Alert.alert("Error", `Failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
+      setCapturedImage(null);
       console.log("Upload process finished");
     }
   };
@@ -86,11 +109,27 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      {React.createElement(CameraView as any, { style: styles.camera, ref: cameraRef })}
+      {capturedImage ? (
+        <View style={styles.container}>
+          <Image source={{ uri: capturedImage }} style={styles.camera} />
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Processing image...</Text>
+            </View>
+          )}
+        </View>
+      ) : (
+        React.createElement(CameraView as any, { style: styles.camera, ref: cameraRef })
+      )}
 
       <View style={styles.controls}>
         {loading ? (
           <ActivityIndicator size="large" color="#007AFF" />
+        ) : capturedImage ? (
+          <TouchableOpacity style={styles.button} onPress={() => setCapturedImage(null)}>
+            <Text style={styles.buttonText}>Retake</Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.button} onPress={takePictureAndUpload}>
             <Text style={styles.buttonText}>Take Picture & Upload</Text>
@@ -119,5 +158,20 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontWeight: "bold",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: "#fff",
+    fontSize: 16,
+    marginTop: 10,
   },
 });
