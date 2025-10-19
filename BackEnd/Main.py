@@ -65,16 +65,23 @@ async def identify_food(request: ImageRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What is in this image?"},
+                        {"type": "text", "text": "What object or item is shown in this image?"},
                         {"type": "image_url", "image_url": {"url": request.image_url}}
                     ]
                 }
             ],
         )
 
+        logger.info(f"Gemini response: {completion}")
+        if not completion.choices or not completion.choices[0].message:
+            raise HTTPException(status_code=500, detail="Invalid response from AI model")
+        
         response_text = completion.choices[0].message.content
-        logger.info(f"Gemini response: {response_text}")
-        return {"food_name": response_text}
+        if not response_text:
+            response_text = "Unable to identify food in the image."
+        
+        logger.info(f"Final response text: {response_text}")
+        return {"item_name": response_text}
 
     except Exception as e:
         logger.error(f"Error in identify_food: {str(e)}")

@@ -74,7 +74,7 @@ export default function CameraScreen() {
 
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
-      Alert.alert("Success", `Food identified: ${identifyData.food_name}`);
+      Alert.alert("Success", `Item identified: ${identifyData.item_name}`);
 
     } catch (error) {
       console.error("Error in takePictureAndUpload:", error);
