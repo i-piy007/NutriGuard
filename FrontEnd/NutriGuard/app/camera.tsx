@@ -16,23 +16,31 @@ export default function CameraScreen() {
   }, []);
 
   const takePictureAndUpload = async () => {
-    if (!cameraRef.current) return;
+    if (!cameraRef.current) {
+      console.log("Camera ref is null, cannot take picture");
+      return;
+    }
     setLoading(true);
+    console.log("Starting picture capture and upload");
 
     try {
       // Take picture
+      console.log("Taking picture...");
       const photo = await cameraRef.current.takePictureAsync({ base64: false });
       console.log("Photo captured:", photo.uri.slice(0, 10) + "...");
 
       // Prepare form data
+      console.log("Preparing form data...");
       const formData = new FormData();
       formData.append("file", {
         uri: photo.uri,
         name: "photo.jpg",
         type: "image/jpeg",
       } as any);
+      console.log("Form data prepared");
 
       // Send to backend
+      console.log("Sending request to backend...");
       const response = await fetch("https://nutriguard-n98n.onrender.com/upload", {
         method: "POST",
         body: formData,
@@ -40,16 +48,18 @@ export default function CameraScreen() {
           "Content-Type": "multipart/form-data",
         },
       });
+      console.log("Response received, status:", response.status);
 
       const data = await response.json();
-      console.log("Response from backend:", JSON.stringify(data).slice(0, 50) + "...");
+      console.log("Response data:", JSON.stringify(data).slice(0, 50) + "...");
       Alert.alert("Success", JSON.stringify(data));
 
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.error("Error in takePictureAndUpload:", error);
       Alert.alert("Error", "Failed to upload image.");
     } finally {
       setLoading(false);
+      console.log("Upload process finished");
     }
   };
 
