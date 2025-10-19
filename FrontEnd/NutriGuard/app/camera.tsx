@@ -16,60 +16,34 @@ export default function CameraScreen() {
     })();
   }, []);
 
-  const takePictureAndUpload = async () => {
+    const takePictureAndUpload = async () => {
     if (!cameraRef.current) {
       console.log("Camera ref is null, cannot take picture");
       return;
     }
     setLoading(true);
-    console.log("Starting picture capture and upload");
+    console.log("Starting picture capture and identification");
 
     try {
-      // Take picture
+      // Take picture with base64
       console.log("Taking picture...");
-      const photo = await cameraRef.current.takePictureAsync({ base64: false });
-      console.log("Photo captured:", photo.uri.slice(0, 10) + "...");
+      const photo = await cameraRef.current.takePictureAsync({ base64: true });
+      console.log("Photo captured, base64 length:", photo.base64?.length || 0);
       setCapturedImage(photo.uri);
 
-      // Prepare form data
-      console.log("Preparing form data...");
-      const formData = new FormData();
-      formData.append("file", {
-        uri: photo.uri,
-        name: "photo.jpg",
-        type: "image/jpeg",
-      } as any);
-      console.log("Form data prepared");
-
-      // First, upload the image to backend
-      console.log("Uploading image to backend...");
-      const uploadResponse = await fetch("https://nutriguard-n98n.onrender.com/upload", {
-        method: "POST",
-        body: formData,
-      });
-      console.log("Upload response status:", uploadResponse.status);
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.status}`);
-      }
-
-      const uploadData = await uploadResponse.json();
-      console.log("Upload response data:", uploadData);
-      const imageUrl = uploadData.image_url;
-
-      // Now, send the image URL to identify food
-      console.log("Identifying food with URL:", imageUrl);
+      // Send base64 directly to identify
+      console.log("Sending base64 to backend for identification...");
       const identifyResponse = await fetch("https://nutriguard-n98n.onrender.com/identify-food", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ image_url: imageUrl }),
+        body: JSON.stringify({ image_base64: photo.base64 }),
       });
       console.log("Identify response status:", identifyResponse.status);
 
       if (!identifyResponse.ok) {
-        throw new Error(`Identify failed: ${identifyResponse.status}`);
+        throw new Error(`Identification failed: ${identifyResponse.status}`);
       }
 
       const identifyData = await identifyResponse.json();
@@ -82,7 +56,7 @@ export default function CameraScreen() {
     } finally {
       setLoading(false);
       setCapturedImage(null);
-      console.log("Upload process finished");
+      console.log("Identification process finished");
     }
   };
 
@@ -132,7 +106,7 @@ export default function CameraScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.button} onPress={takePictureAndUpload}>
-            <Text style={styles.buttonText}>Take Picture & Upload</Text>
+            <Text style={styles.buttonText}>Take Picture & Identify</Text>
           </TouchableOpacity>
         )}
       </View>

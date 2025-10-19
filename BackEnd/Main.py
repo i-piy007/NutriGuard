@@ -1,10 +1,8 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from openai import OpenAI
 import os
 import logging
-import shutil
-from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,40 +18,15 @@ client = OpenAI(
 
 app = FastAPI()
 
-# Create public directory if it doesn't exist
-public_dir = Path("public")
-public_dir.mkdir(exist_ok=True)
-
-# Mount static files
-from fastapi.staticfiles import StaticFiles
-app.mount("/public", StaticFiles(directory="public"), name="public")
-
 class ImageRequest(BaseModel):
-    image_url: str  # Now expects a URL to the image
-
-@app.post("/upload")
-async def upload_image(file: UploadFile = File(...)):
-    logger.info("Received upload request")
-    try:
-        # Save the file to public directory
-        file_path = public_dir / file.filename
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Return the public URL
-        image_url = f"https://nutriguard-n98n.onrender.com/public/{file.filename}"
-        logger.info(f"Image saved and URL returned: {image_url}")
-        return {"image_url": image_url}
-    except Exception as e:
-        logger.error(f"Error uploading image: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    image_base64: str  # Expects base64 encoded image
 
 @app.post("/identify-food")
 async def identify_food(request: ImageRequest):
-    logger.info("Received request to /identify-food with URL: " + request.image_url)
+    logger.info("Received request to /identify-food with base64 image")
     try:
-        logger.info("Sending image URL to Gemini model")
-        # Send image URL to Gemini/Google multimodal model
+        logger.info("Sending base64 image to Gemini model")
+        # Send base64 image to Gemini/Google multimodal model
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",  # optional
@@ -66,7 +39,7 @@ async def identify_food(request: ImageRequest):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": "What object or item is shown in this image?"},
-                        {"type": "image_url", "image_url": {"url": request.image_url}}
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{request.image_base64}"}}
                     ]
                 }
             ],
@@ -78,7 +51,7 @@ async def identify_food(request: ImageRequest):
         
         response_text = completion.choices[0].message.content
         if not response_text:
-            response_text = "Unable to identify food in the image."
+            response_text = "Unable to identify item in the image."
         
         logger.info(f"Final response text: {response_text}")
         return {"item_name": response_text}
