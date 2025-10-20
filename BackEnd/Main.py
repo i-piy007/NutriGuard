@@ -407,8 +407,20 @@ async def get_user_profile(authorization: Optional[str] = Header(None)):
     cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (user_id,))
     row = cur.fetchone()
     conn.close()
+    # If no DB row exists for this user id, return a default/empty profile
+    # so the client can show editable fields (None -> empty) and allow the user to save.
     if not row:
-        raise HTTPException(status_code=404, detail='User not found')
+        logger.warning(f"User id={user_id} not found in DB; returning empty profile based on token payload")
+        return {
+            'id': user_id,
+            'email': payload.get('email'),
+            'username': payload.get('username'),
+            'name': payload.get('name') or None,
+            'height': None,
+            'weight': None,
+            'gender': None,
+            'age': None,
+        }
     return {
         'id': row[0],
         'email': row[1],
