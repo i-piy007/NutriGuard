@@ -209,11 +209,20 @@ class RegisterRequest(BaseModel):
 @app.post("/register")
 async def register(req: RegisterRequest):
     logger.info(f"[auth] Register attempt for {req.email}")
-    if get_user_by_email(req.email):
+    try:
+        if get_user_by_email(req.email):
+            raise HTTPException(status_code=400, detail="User already exists")
+        user = create_user(req.email, req.password, req.name)
+        token = create_token(user["id"], user["email"]) if isinstance(user, dict) else create_token(user["id"], user["email"])
+        return {"user": user, "token": token}
+    except HTTPException:
+        raise
+    except sqlite3.IntegrityError as ie:
+        logger.exception("SQLite integrity error during register")
         raise HTTPException(status_code=400, detail="User already exists")
-    user = create_user(req.email, req.password, req.name)
-    token = create_token(user["id"], user["email"]) if isinstance(user, dict) else create_token(user["id"], user["email"])
-    return {"user": user, "token": token}
+    except Exception as e:
+        logger.exception(f"Error in register: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class LoginRequest(BaseModel):
@@ -224,13 +233,19 @@ class LoginRequest(BaseModel):
 @app.post("/login")
 async def login(req: LoginRequest):
     logger.info(f"[auth] Login attempt for {req.email}")
-    user = get_user_by_email(req.email)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if user["password_hash"] != hash_password(req.password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token(user["id"], user["email"])
-    return {"user": {"id": user["id"], "email": user["email"], "name": user.get("name")}, "token": token}
+    try:
+        user = get_user_by_email(req.email)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if user["password_hash"] != hash_password(req.password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        token = create_token(user["id"], user["email"])
+        return {"user": {"id": user["id"], "email": user["email"], "name": user.get("name")}, "token": token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in login: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # --- Metrics endpoints ---
@@ -307,6 +322,12 @@ async def get_metrics(day: str, authorization: Optional[str] = Header(None)):
         meals.append({"name": m[0], "calories": m[1], "protein": m[2], "carbs": m[3], "fat": m[4], "sugar": m[5], "fiber": m[6], "raw": m[7]})
     conn.close()
     return {"day": day, "items": meals, "totals": totals}
+
+
+@app.get("/ping")
+async def ping():
+    """Health endpoint to verify server is up and returning JSON."""
+    return {"ok": True, "time": datetime.utcnow().isoformat()}
 
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
