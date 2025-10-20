@@ -111,17 +111,17 @@ const Dashboard = () => {
                         </View>
                     )}
                 </AnimatedCircularProgress>
-                <Text style={styles.title}>Calories</Text>
+                <Text style={styles.calorieLabel}>Calories</Text>
             </View>
 
             {/* Macronutrient circular progress row */}
             <View style={styles.macroRow}>
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={120}
-                        width={10}
+                        size={100}
+                        width={8}
                         fill={proteinFill}
-                        tintColor="#f94144"
+                        tintColor="lightblue"
                         backgroundColor="#eee"
                     >
                         {(fill: number) => (
@@ -136,8 +136,8 @@ const Dashboard = () => {
 
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={120}
-                        width={10}
+                        size={100}
+                        width={8}
                         fill={carbsFill}
                         tintColor="#577590"
                         backgroundColor="#eee"
@@ -154,8 +154,8 @@ const Dashboard = () => {
 
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={120}
-                        width={10}
+                        size={100}
+                        width={8}
                         fill={fatFill}
                         tintColor="#f3722c"
                         backgroundColor="#eee"
@@ -251,13 +251,14 @@ const styles = StyleSheet.create({
     // === Macro row / circular progress ===
     macroRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
     },
     macroItem: {
-        width: '32%',
+        width: 110,
         alignItems: 'center',
+        marginHorizontal: 8,
     },
     innerCircle: {
         position: 'absolute',
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     macroValue: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
         color: '#333',
     },
@@ -292,16 +293,27 @@ const styles = StyleSheet.create({
         color: '#666',
     },
 
+    calorieLabel: {
+        fontSize: 30,
+        fontWeight: '700',
+        color: '#333',
+        marginTop: 10,
+        textAlign: 'center',
+    },
+
     // === Micro row for sugar & fiber ===
     microRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
+        paddingHorizontal: 50,
+        gap: 10,
     },
     microItem: {
         alignItems: 'center',
         width: '45%',
+        marginHorizontal: 6,
     },
 
     // === Middle Grid ===
