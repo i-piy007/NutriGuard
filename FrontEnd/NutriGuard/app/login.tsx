@@ -19,14 +19,31 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name }),
       });
+      console.log('register response status', resp.status, resp.headers);
       if (!resp.ok) {
-        const j = await resp.json();
-        Alert.alert('Register failed', j.detail || JSON.stringify(j));
+        // Try to parse JSON, fallback to text
+        try {
+          const j = await resp.json();
+          Alert.alert('Register failed', j.detail || JSON.stringify(j));
+        } catch (err) {
+          const txt = await resp.text();
+          console.warn('Non-JSON register response:', txt);
+          Alert.alert('Register failed', txt);
+        }
         return;
       }
-      const j = await resp.json();
-  await saveToken(j.token);
-  router.replace('/dashboard');
+      // OK response - parse JSON safely
+      let j: any = null;
+      try {
+        j = await resp.json();
+      } catch (err) {
+        const txt = await resp.text();
+        console.warn('Register returned non-JSON on success:', txt);
+        Alert.alert('Register error', 'Unexpected response from server: ' + txt);
+        return;
+      }
+      await saveToken(j.token);
+      router.replace('/dashboard');
     } catch (e) {
       Alert.alert('Error', String(e));
     }
@@ -39,14 +56,29 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      console.log('login response status', resp.status, resp.headers);
       if (!resp.ok) {
-        const j = await resp.json();
-        Alert.alert('Login failed', j.detail || JSON.stringify(j));
+        try {
+          const j = await resp.json();
+          Alert.alert('Login failed', j.detail || JSON.stringify(j));
+        } catch (err) {
+          const txt = await resp.text();
+          console.warn('Non-JSON login response:', txt);
+          Alert.alert('Login failed', txt);
+        }
         return;
       }
-      const j = await resp.json();
-  await saveToken(j.token);
-  router.replace('/dashboard');
+      let j: any = null;
+      try {
+        j = await resp.json();
+      } catch (err) {
+        const txt = await resp.text();
+        console.warn('Login returned non-JSON on success:', txt);
+        Alert.alert('Login error', 'Unexpected response from server: ' + txt);
+        return;
+      }
+      await saveToken(j.token);
+      router.replace('/dashboard');
     } catch (e) {
       Alert.alert('Error', String(e));
     }
