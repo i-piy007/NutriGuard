@@ -68,10 +68,12 @@ import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from 'expo-router';
+import { Buffer } from 'buffer';
 
 const Dashboard = () => {
     // Start from zeros and load stored totals (replace, don't add to defaults)
     const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
+    const [username, setUsername] = useState<string | null>(null);
 
     const loadTotals = useCallback(async () => {
         try {
@@ -95,10 +97,42 @@ const Dashboard = () => {
         }
     }, []);
 
+    const loadUser = useCallback(async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            console.log('[dashboard] token from storage:', !!token);
+            if (!token) {
+                setUsername(null);
+                return;
+            }
+            // Try to decode JWT payload without a library: middle segment base64
+            try {
+                const parts = token.split('.');
+                if (parts.length >= 2) {
+                    const payload = parts[1];
+                    // base64 decode (handle URL-safe base64)
+                    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+                    const json = Buffer.from(b64, 'base64').toString('utf8');
+                    const obj = JSON.parse(json);
+                    console.log('[dashboard] decoded token payload:', obj);
+                    setUsername(obj.username || obj.name || obj.email || null);
+                    return;
+                }
+            } catch (e) {
+                console.warn('[dashboard] failed to decode token', e);
+            }
+            setUsername(null);
+        } catch (e) {
+            console.error('[dashboard] loadUser error', e);
+            setUsername(null);
+        }
+    }, []);
+
     // Reload totals when the screen is focused so updates from FoodAdd are picked up
     useFocusEffect(
         useCallback(() => {
             loadTotals();
+            loadUser();
         }, [loadTotals])
     );
 
@@ -109,7 +143,7 @@ const Dashboard = () => {
                 <View style={{flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 16}}>
                     <Text style={styles.topTitle}>Calorie</Text>
                     <TouchableOpacity onPress={() => router.push('/login')} style={{padding: 8, backgroundColor: '#fff', borderRadius: 8}}>
-                        <Text>User</Text>
+                        <Text>{username ? `Hi, ${username}` : 'User'}</Text>
                     </TouchableOpacity>
                 </View>
                 <Text style={styles.topValue}>{Math.ceil(totals.calories)} kcal</Text>

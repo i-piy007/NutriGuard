@@ -57,6 +57,7 @@ def create_db():
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE,
         password_hash TEXT NOT NULL,
         name TEXT
     )
@@ -95,6 +96,40 @@ def create_db():
     conn.commit()
     conn.close()
 
+    # Migration: ensure username column exists and has a UNIQUE index
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cur.fetchall()]
+        if 'username' not in cols:
+            # Add the username column (nullable for existing rows)
+            cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
+            conn.commit()
+        # Create a unique index on username if it doesn't exist
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+        conn.commit()
+
+        # Populate username for existing users if empty: use part before @ from email or email itself
+        cur.execute("SELECT id, email, username FROM users")
+        rows = cur.fetchall()
+        for r in rows:
+            uid, email_val, uname = r
+            if uname:
+                continue
+            base = email_val.split('@')[0] if email_val and '@' in email_val else email_val
+            candidate = base or f'user{uid}'
+            # ensure uniqueness: if candidate exists, append uid
+            cur.execute("SELECT id FROM users WHERE username = ?", (candidate,))
+            if cur.fetchone():
+                candidate = f"{candidate}_{uid}"
+            cur.execute("UPDATE users SET username = ? WHERE id = ?", (candidate, uid))
+        conn.commit()
+    except Exception:
+        logger.exception('Error migrating/ensuring username column')
+    finally:
+        conn.close()
+
 
 create_db()
 
@@ -127,8 +162,8 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
-def create_token(user_id: int, email: str) -> str:
-    payload = {"user_id": user_id, "email": email, "iat": datetime.utcnow().timestamp()}
+def create_token(user_id: int, email: str, username: Optional[str] = None) -> str:
+    payload = {"user_id": user_id, "email": email, "username": username, "iat": datetime.utcnow().timestamp()}
     # Use PyJWT encode — ensure the imported jwt module supports encode
     if not getattr(pyjwt, "encode", None):
         logger.error("Imported jwt module does not expose 'encode'. Is PyJWT installed?")
@@ -151,23 +186,29 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT id, email, password_hash, name FROM users WHERE email = ?", (email,))
+    cur.execute("SELECT id, email, username, password_hash, name FROM users WHERE email = ?", (email,))
     row = cur.fetchone()
     conn.close()
     if not row:
         return None
-    return {"id": row[0], "email": row[1], "password_hash": row[2], "name": row[3]}
+    return {"id": row[0], "email": row[1], "username": row[2], "password_hash": row[3], "name": row[4]}
 
 
 def create_user(email: str, password: str, name: Optional[str] = None) -> Dict[str, Any]:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     pwd = hash_password(password)
-    cur.execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", (email, pwd, name))
+    # Derive a username from email if not explicitly provided in the caller
+    username = None
+    try:
+        username = email.split('@')[0] if email and '@' in email else email
+    except Exception:
+        username = email
+    cur.execute("INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)", (email, username, pwd, name))
     conn.commit()
     user_id = cur.lastrowid
     conn.close()
-    return {"id": user_id, "email": email, "name": name}
+    return {"id": user_id, "email": email, "username": username, "name": name}
 
 
 def get_or_create_metric_for_day(user_id: int, day: str) -> int:
@@ -208,19 +249,34 @@ def add_meal_to_metric(metric_id: int, meal: Dict[str, Any]):
 
 # --- Auth endpoints ---
 class RegisterRequest(BaseModel):
-    email: str
+    username: str
     password: str
     name: Optional[str] = None
 
 
 @app.post("/register")
 async def register(req: RegisterRequest):
-    logger.info(f"[auth] Register attempt for {req.email}")
+    logger.info(f"[auth] Register attempt for username={req.username}")
     try:
-        if get_user_by_email(req.email):
+        # check if username already exists
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+        if cur.fetchone():
+            conn.close()
             raise HTTPException(status_code=400, detail="User already exists")
-        user = create_user(req.email, req.password, req.name)
-        token = create_token(user["id"], user["email"]) if isinstance(user, dict) else create_token(user["id"], user["email"])
+        # create a synthetic email to preserve existing schema
+        synthetic_email = f"{req.username}@local"
+        user = create_user(synthetic_email, req.password, req.name)
+        # ensure username is set correctly for the new user
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET username = ? WHERE id = ?", (req.username, user["id"]))
+        conn.commit()
+        conn.close()
+        token = create_token(user["id"], user.get("email", synthetic_email), req.username)
+        logger.info(f"[auth] Registered user id={user['id']} username={req.username}")
+        logger.debug(f"[auth] Issued token for user id={user['id']}")
         return {"user": user, "token": token}
     except HTTPException:
         raise
@@ -233,21 +289,29 @@ async def register(req: RegisterRequest):
 
 
 class LoginRequest(BaseModel):
-    email: str
+    username: str
     password: str
 
 
 @app.post("/login")
 async def login(req: LoginRequest):
-    logger.info(f"[auth] Login attempt for {req.email}")
+    logger.info(f"[auth] Login attempt for username={req.username}")
     try:
-        user = get_user_by_email(req.email)
-        if not user:
+        # lookup by username
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT id, email, username, password_hash, name FROM users WHERE username = ?", (req.username,))
+        row = cur.fetchone()
+        conn.close()
+        if not row:
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = {"id": row[0], "email": row[1], "username": row[2], "password_hash": row[3], "name": row[4]}
         if user["password_hash"] != hash_password(req.password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        token = create_token(user["id"], user["email"])
-        return {"user": {"id": user["id"], "email": user["email"], "name": user.get("name")}, "token": token}
+        token = create_token(user["id"], user.get("email"), user.get("username"))
+        logger.info(f"[auth] Login success for user id={user['id']} username={user.get('username')}")
+        logger.debug(f"[auth] Issued token for user id={user['id']}")
+        return {"user": {"id": user["id"], "email": user["email"], "username": user.get("username"), "name": user.get("name")}, "token": token}
     except HTTPException:
         raise
     except Exception as e:
