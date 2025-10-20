@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
@@ -60,6 +60,8 @@ export default function UserProfile() {
         Alert.alert('Save failed', txt);
         return;
       }
+      const j = await resp.json();
+      if (j && j.profile) setProfile(j.profile);
       Alert.alert('Saved');
     } catch (e) {
       console.error('[profile] save exception', e);
@@ -94,7 +96,15 @@ export default function UserProfile() {
           <TextInput style={styles.input} value={profile.name || ''} onChangeText={(t) => setProfile({ ...profile, name: t })} />
 
           <Text>Gender</Text>
-          <TextInput style={styles.input} value={profile.gender || ''} onChangeText={(t) => setProfile({ ...profile, gender: t })} />
+          <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+            {['Male', 'Female', 'Other'].map((g) => (
+              <TouchableOpacity key={g} style={{ marginRight: 8 }} onPress={() => setProfile({ ...profile, gender: g })}>
+                <View style={{ padding: 8, borderWidth: 1, borderColor: profile.gender === g ? '#007AFF' : '#ccc', borderRadius: 6 }}>
+                  <Text style={{ color: profile.gender === g ? '#007AFF' : '#000' }}>{g}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Text>Age</Text>
           <TextInput style={styles.input} keyboardType="numeric" value={profile.age ? String(profile.age) : ''} onChangeText={(t) => setProfile({ ...profile, age: t })} />

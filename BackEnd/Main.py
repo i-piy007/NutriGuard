@@ -461,17 +461,61 @@ async def update_user_profile(req: UserProfileRequest, authorization: Optional[s
         if req.age is not None:
             updates.append('age = ?')
             params.append(req.age)
+        target_id = user_id
+        # If the user row for this id does not exist, try to find by username or email from token
+        cur.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+        if not cur.fetchone():
+            uname = payload.get('username')
+            email = payload.get('email')
+            found_id = None
+            if uname:
+                cur.execute('SELECT id FROM users WHERE username = ?', (uname,))
+                r = cur.fetchone()
+                if r:
+                    found_id = r[0]
+            if not found_id and email:
+                cur.execute('SELECT id FROM users WHERE email = ?', (email,))
+                r = cur.fetchone()
+                if r:
+                    found_id = r[0]
+            if found_id:
+                target_id = found_id
+            else:
+                # Insert a new placeholder user row so we can save profile data.
+                # password_hash is NOT NULL in schema, so use an empty-hash placeholder.
+                placeholder_email = email or (f"{uname}@local" if uname else f"user{user_id}@local")
+                placeholder_username = uname or f"user{user_id}"
+                try:
+                    cur.execute('INSERT INTO users (id, email, username, password_hash, name) VALUES (?, ?, ?, ?, ?)',
+                                (user_id, placeholder_email, placeholder_username, hash_password(''), req.name))
+                    conn.commit()
+                    target_id = user_id
+                except Exception:
+                    # As a fallback, insert without specifying id (let sqlite choose) and use that id
+                    cur.execute('INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)',
+                                (placeholder_email, placeholder_username, hash_password(''), req.name))
+                    conn.commit()
+                    target_id = cur.lastrowid
+
         if updates:
-            params.append(user_id)
+            params.append(target_id)
             sql = 'UPDATE users SET ' + ', '.join(updates) + ' WHERE id = ?'
             cur.execute(sql, params)
             conn.commit()
+        # Return the upserted profile
+        cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (target_id,))
+        row = cur.fetchone()
+        profile = None
+        if row:
+            profile = {'id': row[0], 'email': row[1], 'username': row[2], 'name': row[3], 'height': row[4], 'weight': row[5], 'gender': row[6], 'age': row[7]}
+        else:
+            profile = {'id': target_id, 'email': payload.get('email'), 'username': payload.get('username'), 'name': req.name or None, 'height': None, 'weight': None, 'gender': None, 'age': None}
     except Exception:
         logger.exception('Error updating profile')
         raise HTTPException(status_code=500, detail='Failed to update profile')
     finally:
         conn.close()
-    return {'status': 'ok'}
+    return {'status': 'ok', 'profile': profile}
 
 
 @app.get("/metrics/get")
