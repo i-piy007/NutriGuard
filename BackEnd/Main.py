@@ -110,7 +110,7 @@ def create_db():
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         conn.commit()
 
-            # Populate username for existing users if empty: use part before @ from email or email itself
+        # Populate username for existing users if empty: use part before @ from email or email itself
         cur.execute("SELECT id, email, username FROM users")
         rows = cur.fetchall()
         for r in rows:
@@ -125,7 +125,8 @@ def create_db():
                 candidate = f"{candidate}_{uid}"
             cur.execute("UPDATE users SET username = ? WHERE id = ?", (candidate, uid))
         conn.commit()
-            # Ensure user profile columns exist (height, weight, gender, age)
+
+        # Ensure user profile columns exist (height, weight, gender, age)
         cur.execute("PRAGMA table_info(users)")
         cols_now = [r[1] for r in cur.fetchall()]
         profile_cols = {
@@ -148,6 +149,31 @@ def create_db():
 
 
 create_db()
+
+# Dev-only admin bypass: only enable if DEV_ADMIN_BYPASS env var is set to '1'
+DEV_ADMIN_BYPASS = os.getenv('DEV_ADMIN_BYPASS', '0') == '1'
+
+
+@app.post('/admin/bypass')
+async def admin_bypass():
+    if not DEV_ADMIN_BYPASS:
+        raise HTTPException(status_code=403, detail='Admin bypass not enabled')
+    # create admin user if missing and return token
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, email FROM users WHERE username = 'admin'")
+    row = cur.fetchone()
+    if row:
+        user_id = row[0]
+        email = row[2]
+    else:
+        # create admin with default password 'admin' (dev only)
+        admin = create_user('admin@local', 'admin', name='Administrator', username='admin')
+        user_id = admin['id']
+        email = admin['email']
+    conn.close()
+    token = create_token(user_id, email, 'admin')
+    return {'token': token, 'user': {'id': user_id, 'username': 'admin', 'email': email}}
 
 
 def summarize(obj, max_words=10):
@@ -210,21 +236,21 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     return {"id": row[0], "email": row[1], "username": row[2], "password_hash": row[3], "name": row[4]}
 
 
-def create_user(email: str, password: str, name: Optional[str] = None) -> Dict[str, Any]:
+def create_user(email: str, password: str, name: Optional[str] = None, username: Optional[str] = None, height: Optional[float] = None, weight: Optional[float] = None, gender: Optional[str] = None, age: Optional[int] = None) -> Dict[str, Any]:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     pwd = hash_password(password)
     # Derive a username from email if not explicitly provided in the caller
-    username = None
-    try:
-        username = email.split('@')[0] if email and '@' in email else email
-    except Exception:
-        username = email
-    cur.execute("INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)", (email, username, pwd, name))
+    if not username:
+        try:
+            username = email.split('@')[0] if email and '@' in email else email
+        except Exception:
+            username = email
+    cur.execute("INSERT INTO users (email, username, password_hash, name, height, weight, gender, age) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (email, username, pwd, name, height, weight, gender, age))
     conn.commit()
     user_id = cur.lastrowid
     conn.close()
-    return {"id": user_id, "email": email, "username": username, "name": name}
+    return {"id": user_id, "email": email, "username": username, "name": name, "height": height, "weight": weight, "gender": gender, "age": age}
 
 
 def get_or_create_metric_for_day(user_id: int, day: str) -> int:
@@ -268,6 +294,10 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     name: Optional[str] = None
+    age: Optional[int] = None
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    gender: Optional[str] = None
 
 
 @app.post("/register")
@@ -281,15 +311,10 @@ async def register(req: RegisterRequest):
         if cur.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="User already exists")
-        # create a synthetic email to preserve existing schema
+
+        # create a synthetic email to preserve existing schema, store provided profile fields
         synthetic_email = f"{req.username}@local"
-        user = create_user(synthetic_email, req.password, req.name)
-        # ensure username is set correctly for the new user
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        cur.execute("UPDATE users SET username = ? WHERE id = ?", (req.username, user["id"]))
-        conn.commit()
-        conn.close()
+        user = create_user(synthetic_email, req.password, req.name, username=req.username, height=req.height, weight=req.weight, gender=req.gender, age=req.age)
         token = create_token(user["id"], user.get("email", synthetic_email), req.username)
         logger.info(f"[auth] Registered user id={user['id']} username={req.username}")
         logger.debug(f"[auth] Issued token for user id={user['id']}")
@@ -461,17 +486,61 @@ async def update_user_profile(req: UserProfileRequest, authorization: Optional[s
         if req.age is not None:
             updates.append('age = ?')
             params.append(req.age)
+        target_id = user_id
+        # If the user row for this id does not exist, try to find by username or email from token
+        cur.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+        if not cur.fetchone():
+            uname = payload.get('username')
+            email = payload.get('email')
+            found_id = None
+            if uname:
+                cur.execute('SELECT id FROM users WHERE username = ?', (uname,))
+                r = cur.fetchone()
+                if r:
+                    found_id = r[0]
+            if not found_id and email:
+                cur.execute('SELECT id FROM users WHERE email = ?', (email,))
+                r = cur.fetchone()
+                if r:
+                    found_id = r[0]
+            if found_id:
+                target_id = found_id
+            else:
+                # Insert a new placeholder user row so we can save profile data.
+                # password_hash is NOT NULL in schema, so use an empty-hash placeholder.
+                placeholder_email = email or (f"{uname}@local" if uname else f"user{user_id}@local")
+                placeholder_username = uname or f"user{user_id}"
+                try:
+                    cur.execute('INSERT INTO users (id, email, username, password_hash, name) VALUES (?, ?, ?, ?, ?)',
+                                (user_id, placeholder_email, placeholder_username, hash_password(''), req.name))
+                    conn.commit()
+                    target_id = user_id
+                except Exception:
+                    # As a fallback, insert without specifying id (let sqlite choose) and use that id
+                    cur.execute('INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)',
+                                (placeholder_email, placeholder_username, hash_password(''), req.name))
+                    conn.commit()
+                    target_id = cur.lastrowid
+
         if updates:
-            params.append(user_id)
+            params.append(target_id)
             sql = 'UPDATE users SET ' + ', '.join(updates) + ' WHERE id = ?'
             cur.execute(sql, params)
             conn.commit()
+        # Return the upserted profile
+        cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (target_id,))
+        row = cur.fetchone()
+        profile = None
+        if row:
+            profile = {'id': row[0], 'email': row[1], 'username': row[2], 'name': row[3], 'height': row[4], 'weight': row[5], 'gender': row[6], 'age': row[7]}
+        else:
+            profile = {'id': target_id, 'email': payload.get('email'), 'username': payload.get('username'), 'name': req.name or None, 'height': None, 'weight': None, 'gender': None, 'age': None}
     except Exception:
         logger.exception('Error updating profile')
         raise HTTPException(status_code=500, detail='Failed to update profile')
     finally:
         conn.close()
-    return {'status': 'ok'}
+    return {'status': 'ok', 'profile': profile}
 
 
 @app.get("/metrics/get")

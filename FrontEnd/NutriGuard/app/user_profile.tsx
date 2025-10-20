@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
@@ -60,6 +60,8 @@ export default function UserProfile() {
         Alert.alert('Save failed', txt);
         return;
       }
+      const j = await resp.json();
+      if (j && j.profile) setProfile(j.profile);
       Alert.alert('Saved');
     } catch (e) {
       console.error('[profile] save exception', e);
@@ -71,6 +73,51 @@ export default function UserProfile() {
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('nutritionTotals');
     router.replace('/login');
+  };
+
+  const handleClearTodayAndOpenDev = async () => {
+    // legacy combined handler kept for backward compatibility but will not be used by UI
+    await handleClearToday();
+    await handleOpenDev();
+  };
+
+  const handleClearToday = async () => {
+    // Clear local totals
+    await AsyncStorage.setItem('nutritionTotals', JSON.stringify({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 }));
+    // Also clear server-side metric for today if logged in
+    const t = await AsyncStorage.getItem('token');
+    if (t) {
+      try {
+        const zeroPayload = { day: new Date().toISOString().slice(0,10), nutrition: { items: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 } } };
+        const resp = await fetch('https://nutriguard-n98n.onrender.com/metrics/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
+          body: JSON.stringify(zeroPayload),
+        });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          console.warn('[profile] failed clearing server metrics', resp.status, txt);
+        } else {
+          Alert.alert('Cleared', "Today's macros cleared on server and locally.");
+        }
+      } catch (e) {
+        console.warn('[profile] exception clearing server metrics', e);
+        Alert.alert('Cleared', "Local totals cleared; server update failed.");
+      }
+    } else {
+      Alert.alert('Cleared', "Today's macros cleared locally.");
+    }
+  };
+
+  const handleOpenDev = async () => {
+    const dummyNutrition = {
+      items: [
+        { name: 'Dev Sample: Apple', calories: 95, protein_g: 0.5, carbohydrates_total_g: 25, fat_total_g: 0.3, sugar_g: 19, fiber_g: 4.4 },
+        { name: 'Dev Sample: Boiled Egg', calories: 78, protein_g: 6, carbohydrates_total_g: 0.6, fat_total_g: 5.3, sugar_g: 0.6, fiber_g: 0 }
+      ],
+      totals: { calories: 173, protein: 6.5, carbs: 25.6, fat: 5.6, sugar: 19.6, fiber: 4.4 }
+    };
+    router.push({ pathname: '/food_add', params: { imageUrl: 'https://indiaforbeginners.com/wp-content/uploads/2020/04/India-for-Beginners-custom-tours-8.jpg', itemName: 'Development Sample', nutrition: JSON.stringify(dummyNutrition) } });
   };
 
   if (!token) {
@@ -94,7 +141,15 @@ export default function UserProfile() {
           <TextInput style={styles.input} value={profile.name || ''} onChangeText={(t) => setProfile({ ...profile, name: t })} />
 
           <Text>Gender</Text>
-          <TextInput style={styles.input} value={profile.gender || ''} onChangeText={(t) => setProfile({ ...profile, gender: t })} />
+          <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+            {['Male', 'Female', 'Other'].map((g) => (
+              <TouchableOpacity key={g} style={{ marginRight: 8 }} onPress={() => setProfile({ ...profile, gender: g })}>
+                <View style={{ padding: 8, borderWidth: 1, borderColor: profile.gender === g ? '#007AFF' : '#ccc', borderRadius: 6 }}>
+                  <Text style={{ color: profile.gender === g ? '#007AFF' : '#000' }}>{g}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Text>Age</Text>
           <TextInput style={styles.input} keyboardType="numeric" value={profile.age ? String(profile.age) : ''} onChangeText={(t) => setProfile({ ...profile, age: t })} />
@@ -108,6 +163,24 @@ export default function UserProfile() {
           <View style={{ marginTop: 12, width: '100%' }}>
             <Button title="Save" onPress={handleSave} />
           </View>
+          <View style={{ marginTop: 12, width: '100%' }}>
+            <Button title="Clear today's macros" onPress={async () => {
+              Alert.alert('Clear today', 'This will clear today\'s macros locally and on the server (if logged in). Continue?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Continue', onPress: handleClearToday }
+              ]);
+            }} color="#ff8c00" />
+          </View>
+
+          <View style={{ marginTop: 12, width: '100%' }}>
+            <Button title="Open Dev FoodAdd" onPress={async () => {
+              Alert.alert('Open Dev FoodAdd', 'This will open the Food Add screen with development sample data. Continue?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Continue', onPress: handleOpenDev }
+              ]);
+            }} color="#007AFF" />
+          </View>
+
           <View style={{ marginTop: 12, width: '100%' }}>
             <Button title="Logout" onPress={handleLogout} color="#d33" />
           </View>

@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
-import { useState, useCallback } from "react";
 // react-native-circular-progress may not include TypeScript types in this project.
 // Use a ts-ignore to avoid a compile-time error; consider installing types or
 // adding a declaration file if you want stricter typing.
@@ -16,6 +15,28 @@ const Dashboard = () => {
     // Start from zeros and load stored totals (replace, don't add to defaults)
     const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
     const [username, setUsername] = useState<string | null>(null);
+    const [bmi, setBmi] = useState<number | null>(null);
+
+    const fetchProfileForBmi = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (!token) return;
+            const resp = await fetch('https://nutriguard-n98n.onrender.com/user/profile', { headers: { Authorization: `Bearer ${token}` } });
+            if (!resp.ok) return;
+            const j = await resp.json();
+            const h = j.height; // in cm
+            const w = j.weight; // in kg
+            if (h && w) {
+                const h_m = Number(h) / 100.0;
+                if (h_m > 0) {
+                    const bmiVal = Number(w) / (h_m * h_m);
+                    setBmi(Math.round(bmiVal * 10) / 10);
+                }
+            }
+        } catch (e) {
+            console.warn('[dashboard] failed to fetch profile for BMI', e);
+        }
+    };
 
     const loadTotals = useCallback(async () => {
         try {
@@ -75,6 +96,7 @@ const Dashboard = () => {
         useCallback(() => {
             loadTotals();
             loadUser();
+            fetchProfileForBmi();
         }, [loadTotals])
     );
 
@@ -212,8 +234,8 @@ const Dashboard = () => {
 
             {/* Bottom: BMI card (kept) */}
             <View style={styles.bottomCard}>
-                <Text style={styles.bottomTitle}>BMI</Text>
-                <Text style={styles.bottomValue}>22.5</Text>
+                    <Text style={styles.bottomTitle}>BMI</Text>
+                    <Text style={styles.bottomValue}>{bmi ? bmi.toString() : '—'}</Text>
             </View>
         </View>
     );
