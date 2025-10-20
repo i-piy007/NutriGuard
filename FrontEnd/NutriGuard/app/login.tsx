@@ -25,8 +25,8 @@ export default function LoginScreen() {
         return;
       }
       const j = await resp.json();
-      await saveToken(j.token);
-      router.replace('/');
+  await saveToken(j.token);
+  router.replace('/dashboard');
     } catch (e) {
       Alert.alert('Error', String(e));
     }
@@ -45,8 +45,8 @@ export default function LoginScreen() {
         return;
       }
       const j = await resp.json();
-      await saveToken(j.token);
-      router.replace('/');
+  await saveToken(j.token);
+  router.replace('/dashboard');
     } catch (e) {
       Alert.alert('Error', String(e));
     }
