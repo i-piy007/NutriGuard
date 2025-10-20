@@ -21,6 +21,14 @@ logger.info(f"CALORIENINJAS_API_KEY set: {bool(CALORIENINJAS_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
+# Defensive normalization for the CalorieNinjas key: strip whitespace/newlines which can cause invalid header values
+if CALORIENINJAS_API_KEY:
+    try:
+        CALORIENINJAS_API_KEY = CALORIENINJAS_API_KEY.strip()
+        logger.info("CALORIENINJAS_API_KEY stripped of whitespace/newlines")
+    except Exception:
+        logger.exception("Failed to normalize CALORIENINJAS_API_KEY")
+
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
@@ -149,7 +157,19 @@ async def identify_food(request: ImageRequest):
                 logger.info(f"Raw AI identification text: {summarize(response_text, max_words=40)}")
                 cleaned = re.sub(r"\(.*?\)", "", response_text)
                 raw_items = re.split(r",|\n|\band\b", cleaned)
-                items_to_query = [s.strip() for s in raw_items if s and s.strip()]
+                # Further clean each item: remove numbering like '1.' or '1) ', and remove trailing '- serving info'
+                items_to_query = []
+                for s in raw_items:
+                    if not s or not s.strip():
+                        continue
+                    it = s.strip()
+                    # remove leading numbering (e.g., '1. ', '2) ')
+                    it = re.sub(r"^\s*\d+\s*[\.|\)]\s*", "", it)
+                    # remove trailing hyphenated serving descriptions (e.g., ' - 1 Plate')
+                    it = re.sub(r"\s*-\s*.*$", "", it)
+                    it = it.strip()
+                    if it:
+                        items_to_query.append(it)
                 logger.info(f"Parsed items to query CalorieNinjas: {items_to_query}")
 
                 cn_headers = {"X-Api-Key": CALORIENINJAS_API_KEY}
