@@ -82,11 +82,13 @@ export default function CameraScreen() {
       } catch (e) {
         console.log('Error previewing nutrition:', e);
       }
-      // Navigate to food_add with data
+      // Append cache-busting query param for display so RN Image doesn't use a stale cached file
+      const displayImageUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
+      // Navigate to food_add with data (use displayImageUrl for UI, keep original imageUrl for backend references)
       router.push({
         pathname: "/food_add",
         params: {
-          imageUrl: imageUrl,
+          imageUrl: displayImageUrl,
           itemName: identifyData.item_name,
           nutrition: JSON.stringify(identifyData.nutrition),
         },

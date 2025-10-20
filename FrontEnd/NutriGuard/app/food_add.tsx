@@ -22,8 +22,15 @@ export default function FoodAddScreen() {
       totals.carbs_g += Number(it.carbohydrates_total_g || 0);
       totals.fat_g += Number(it.fat_total_g || 0);
     }
-    console.log('Computed macroTotals in FoodAddScreen:', totals);
-    return totals;
+    // Round up to remove decimals
+    const rounded = {
+      calories: Math.ceil(totals.calories),
+      protein_g: Math.ceil(totals.protein_g),
+      carbs_g: Math.ceil(totals.carbs_g),
+      fat_g: Math.ceil(totals.fat_g),
+    };
+    console.log('Computed macroTotals in FoodAddScreen (rounded up):', rounded);
+    return rounded;
   }, [nutritionData]);
 
   const handleAdd = async () => {
@@ -32,16 +39,31 @@ export default function FoodAddScreen() {
       const stored = await AsyncStorage.getItem("nutritionTotals");
       const totals = stored ? JSON.parse(stored) : { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 };
 
-      // Add current nutrition
+      // Add current nutrition: sum floats then round up before adding to stored totals
       if (nutritionData && nutritionData.items) {
+        const add = { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 };
         nutritionData.items.forEach((item: any) => {
-          totals.calories += item.calories || 0;
-          totals.protein += item.protein_g || 0;
-          totals.carbs += item.carbohydrates_total_g || 0;
-          totals.fat += item.fat_total_g || 0;
-          totals.sugar += item.sugar_g || 0;
-          totals.fiber += item.fiber_g || 0;
+          add.calories += Number(item.calories || 0);
+          add.protein += Number(item.protein_g || 0);
+          add.carbs += Number(item.carbohydrates_total_g || 0);
+          add.fat += Number(item.fat_total_g || 0);
+          add.sugar += Number(item.sugar_g || 0);
+          add.fiber += Number(item.fiber_g || 0);
         });
+        // Round up each aggregated field
+        add.calories = Math.ceil(add.calories);
+        add.protein = Math.ceil(add.protein);
+        add.carbs = Math.ceil(add.carbs);
+        add.fat = Math.ceil(add.fat);
+        add.sugar = Math.ceil(add.sugar);
+        add.fiber = Math.ceil(add.fiber);
+
+        totals.calories += add.calories;
+        totals.protein += add.protein;
+        totals.carbs += add.carbs;
+        totals.fat += add.fat;
+        totals.sugar += add.sugar;
+        totals.fiber += add.fiber;
       }
 
       // Save updated totals

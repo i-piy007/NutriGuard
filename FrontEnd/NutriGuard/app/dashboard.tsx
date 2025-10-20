@@ -64,63 +64,72 @@ const styles = StyleSheet.create({
 });*/
 
 import { Text, View, StyleSheet } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const Dashboard = () => {
-    const [totals, setTotals] = useState({ calories: 2200, protein: 80, carbs: 250, fat: 70, sugar: 50, fiber: 25 });
+    // Start from zeros and load stored totals (replace, don't add to defaults)
+    const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
 
-    useEffect(() => {
-        const loadTotals = async () => {
-            try {
-                const stored = await AsyncStorage.getItem("nutritionTotals");
-                if (stored) {
-                    const data = JSON.parse(stored);
-                    setTotals(prev => ({
-                        calories: prev.calories + (data.calories || 0),
-                        protein: prev.protein + (data.protein || 0),
-                        carbs: prev.carbs + (data.carbs || 0),
-                        fat: prev.fat + (data.fat || 0),
-                        sugar: prev.sugar + (data.sugar || 0),
-                        fiber: prev.fiber + (data.fiber || 0),
-                    }));
-                }
-            } catch (error) {
-                console.error("Error loading totals:", error);
+    const loadTotals = useCallback(async () => {
+        try {
+            const stored = await AsyncStorage.getItem("nutritionTotals");
+            if (stored) {
+                const data = JSON.parse(stored);
+                setTotals({
+                    calories: Number(data.calories || 0),
+                    protein: Number(data.protein || 0),
+                    carbs: Number(data.carbs || 0),
+                    fat: Number(data.fat || 0),
+                    sugar: Number(data.sugar || 0),
+                    fiber: Number(data.fiber || 0),
+                });
+                return;
             }
-        };
-        loadTotals();
+            // if nothing stored, ensure zeros
+            setTotals({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
+        } catch (error) {
+            console.error("Error loading totals:", error);
+        }
     }, []);
+
+    // Reload totals when the screen is focused so updates from FoodAdd are picked up
+    useFocusEffect(
+        useCallback(() => {
+            loadTotals();
+        }, [loadTotals])
+    );
 
     return (
         <View style={styles.container}>
             {/* Top: Calorie Card */}
             <View style={styles.topCard}>
                 <Text style={styles.topTitle}>Calorie</Text>
-                <Text style={styles.topValue}>{totals.calories} kcal</Text>
+                <Text style={styles.topValue}>{Math.ceil(totals.calories)} kcal</Text>
             </View>
 
             {/* Middle: 3 per row grid */}
             <View style={styles.middleGrid}>
                 <View style={styles.gridItem}>
                     <Text style={styles.title}>Protein</Text>
-                    <Text style={styles.value}>{totals.protein} g</Text>
+                    <Text style={styles.value}>{Math.ceil(totals.protein)} g</Text>
                 </View>
                 <View style={styles.gridItem}>
                     <Text style={styles.title}>Carbohydrate</Text>
-                    <Text style={styles.value}>{totals.carbs} g</Text>
+                    <Text style={styles.value}>{Math.ceil(totals.carbs)} g</Text>
                 </View>
                 <View style={styles.gridItem}>
                     <Text style={styles.title}>Fat</Text>
-                    <Text style={styles.value}>{totals.fat} g</Text>
+                    <Text style={styles.value}>{Math.ceil(totals.fat)} g</Text>
                 </View>
                 <View style={styles.gridItem}>
                     <Text style={styles.title}>Sugar</Text>
-                    <Text style={styles.value}>{totals.sugar} g</Text>
+                    <Text style={styles.value}>{Math.ceil(totals.sugar)} g</Text>
                 </View>
                 <View style={styles.gridItem}>
                     <Text style={styles.title}>Fiber</Text>
-                    <Text style={styles.value}>{totals.fiber} g</Text>
+                    <Text style={styles.value}>{Math.ceil(totals.fiber)} g</Text>
                 </View>
             </View>
 
