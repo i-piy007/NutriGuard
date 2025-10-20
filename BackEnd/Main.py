@@ -1,9 +1,14 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from pydantic import BaseModel
 from openai import OpenAI
 import re
 import os
 import logging
+import sqlite3
+import hashlib
+import jwt
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
 import shutil
 from pathlib import Path
 import base64
@@ -21,6 +26,10 @@ logger.info(f"CALORIENINJAS_API_KEY set: {bool(CALORIENINJAS_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
+# JWT secret for token signing
+JWT_SECRET = os.getenv("JWT_SECRET", "change_this_secret")
+logger.info(f"JWT secret set: {bool(JWT_SECRET and JWT_SECRET != 'change_this_secret')}")
+
 # Defensive normalization for the CalorieNinjas key: strip whitespace/newlines which can cause invalid header values
 if CALORIENINJAS_API_KEY:
     try:
@@ -35,6 +44,59 @@ client = OpenAI(
 )
 
 app = FastAPI()
+
+
+# --- Simple SQLite user + metrics storage ---
+DB_PATH = Path("data.db")
+
+def create_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    # users: id, email(unique), password_hash
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT
+    )
+    """)
+    # metrics: id, user_id, day (YYYY-MM-DD), calories, protein, carbs, fat, sugar, fiber
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        day TEXT NOT NULL,
+        calories REAL DEFAULT 0,
+        protein REAL DEFAULT 0,
+        carbs REAL DEFAULT 0,
+        fat REAL DEFAULT 0,
+        sugar REAL DEFAULT 0,
+        fiber REAL DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+    """)
+    # meals: id, metric_id, name, calories, protein, carbs, fat, sugar, fiber, raw_json
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS meals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_id INTEGER NOT NULL,
+        name TEXT,
+        calories REAL,
+        protein REAL,
+        carbs REAL,
+        fat REAL,
+        sugar REAL,
+        fiber REAL,
+        raw_json TEXT,
+        FOREIGN KEY(metric_id) REFERENCES metrics(id)
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+
+create_db()
 
 
 def summarize(obj, max_words=10):
@@ -58,6 +120,193 @@ app.mount("/public", StaticFiles(directory="public"), name="public")
 
 class ImageRequest(BaseModel):
     image_url: str  # Now expects a URL to the image
+
+
+# --- Auth helpers ---
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def create_token(user_id: int, email: str) -> str:
+    payload = {"user_id": user_id, "email": email, "iat": datetime.utcnow().timestamp()}
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    return token
+
+
+def verify_token(token: str) -> Optional[Dict[str, Any]]:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload
+    except Exception:
+        return None
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, email, password_hash, name FROM users WHERE email = ?", (email,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {"id": row[0], "email": row[1], "password_hash": row[2], "name": row[3]}
+
+
+def create_user(email: str, password: str, name: Optional[str] = None) -> Dict[str, Any]:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    pwd = hash_password(password)
+    cur.execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", (email, pwd, name))
+    conn.commit()
+    user_id = cur.lastrowid
+    conn.close()
+    return {"id": user_id, "email": email, "name": name}
+
+
+def get_or_create_metric_for_day(user_id: int, day: str) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM metrics WHERE user_id = ? AND day = ?", (user_id, day))
+    row = cur.fetchone()
+    if row:
+        metric_id = row[0]
+    else:
+        cur.execute("INSERT INTO metrics (user_id, day) VALUES (?, ?)", (user_id, day))
+        metric_id = cur.lastrowid
+        conn.commit()
+    conn.close()
+    return metric_id
+
+
+def add_meal_to_metric(metric_id: int, meal: Dict[str, Any]):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO meals (metric_id, name, calories, protein, carbs, fat, sugar, fiber, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            metric_id,
+            meal.get("name"),
+            meal.get("calories"),
+            meal.get("protein_g"),
+            meal.get("carbohydrates_total_g"),
+            meal.get("fat_total_g"),
+            meal.get("sugar_g"),
+            meal.get("fiber_g"),
+            str(meal),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+# --- Auth endpoints ---
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+
+@app.post("/register")
+async def register(req: RegisterRequest):
+    logger.info(f"[auth] Register attempt for {req.email}")
+    if get_user_by_email(req.email):
+        raise HTTPException(status_code=400, detail="User already exists")
+    user = create_user(req.email, req.password, req.name)
+    token = create_token(user["id"], user["email"]) if isinstance(user, dict) else create_token(user["id"], user["email"])
+    return {"user": user, "token": token}
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/login")
+async def login(req: LoginRequest):
+    logger.info(f"[auth] Login attempt for {req.email}")
+    user = get_user_by_email(req.email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if user["password_hash"] != hash_password(req.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_token(user["id"], user["email"])
+    return {"user": {"id": user["id"], "email": user["email"], "name": user.get("name")}, "token": token}
+
+
+# --- Metrics endpoints ---
+class SaveMetricsRequest(BaseModel):
+    day: str  # YYYY-MM-DD
+    nutrition: Dict[str, Any]  # { items: [...], totals: {...} }
+
+
+def get_user_from_auth_header(auth_header: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not auth_header:
+        return None
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1]
+    payload = verify_token(token)
+    return payload
+
+
+@app.post("/metrics/save")
+async def save_metrics(req: SaveMetricsRequest, authorization: Optional[str] = Header(None)):
+    # Expect Authorization header 'Bearer <token>'
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    user_id = int(payload.get("user_id"))
+    # ensure day format
+    try:
+        datetime.strptime(req.day, "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid day format. Use YYYY-MM-DD")
+
+    metric_id = get_or_create_metric_for_day(user_id, req.day)
+    # save totals to metrics table
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE metrics SET calories = ?, protein = ?, carbs = ?, fat = ?, sugar = ?, fiber = ? WHERE id = ?",
+        (
+            req.nutrition.get("totals", {}).get("calories", 0),
+            req.nutrition.get("totals", {}).get("protein", 0),
+            req.nutrition.get("totals", {}).get("carbs", 0),
+            req.nutrition.get("totals", {}).get("fat", 0),
+            req.nutrition.get("totals", {}).get("sugar", 0),
+            req.nutrition.get("totals", {}).get("fiber", 0),
+            metric_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    # add items as meals
+    for item in req.nutrition.get("items", []):
+        add_meal_to_metric(metric_id, item)
+    return {"status": "ok", "metric_id": metric_id}
+
+
+@app.get("/metrics/get")
+async def get_metrics(day: str, authorization: Optional[str] = Header(None)):
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    user_id = int(payload.get("user_id"))
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, calories, protein, carbs, fat, sugar, fiber FROM metrics WHERE user_id = ? AND day = ?", (user_id, day))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return {"day": day, "items": [], "totals": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0, "sugar": 0, "fiber": 0}}
+    metric_id = row[0]
+    totals = {"calories": row[1], "protein": row[2], "carbs": row[3], "fat": row[4], "sugar": row[5], "fiber": row[6]}
+    cur.execute("SELECT name, calories, protein, carbs, fat, sugar, fiber, raw_json FROM meals WHERE metric_id = ?", (metric_id,))
+    meals = []
+    for m in cur.fetchall():
+        meals.append({"name": m[0], "calories": m[1], "protein": m[2], "carbs": m[3], "fat": m[4], "sugar": m[5], "fiber": m[6], "raw": m[7]})
+    conn.close()
+    return {"day": day, "items": meals, "totals": totals}
 
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
@@ -125,7 +374,7 @@ async def identify_food(request: ImageRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size. and if there is no food in the image then just repsond wih None"},
+                        {"type": "text", "text": "What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size. and if there is no food in the image then just repsond wih UnKnown"},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }

@@ -63,10 +63,11 @@ const styles = StyleSheet.create({
     },
 });*/
 
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from 'expo-router';
 
 const Dashboard = () => {
     // Start from zeros and load stored totals (replace, don't add to defaults)
@@ -105,7 +106,12 @@ const Dashboard = () => {
         <View style={styles.container}>
             {/* Top: Calorie Card */}
             <View style={styles.topCard}>
-                <Text style={styles.topTitle}>Calorie</Text>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 16}}>
+                    <Text style={styles.topTitle}>Calorie</Text>
+                    <TouchableOpacity onPress={() => router.push('/login')} style={{padding: 8, backgroundColor: '#fff', borderRadius: 8}}>
+                        <Text>User</Text>
+                    </TouchableOpacity>
+                </View>
                 <Text style={styles.topValue}>{Math.ceil(totals.calories)} kcal</Text>
             </View>
 
