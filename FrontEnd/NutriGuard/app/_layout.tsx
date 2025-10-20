@@ -11,6 +11,16 @@ export default function RootLayout() {
         name="dashboard"
         options={{
           title: "NutriGuard",
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/login')}
+              style={{ paddingHorizontal: 12 }}
+              accessibilityLabel="Open user"
+            >
+              <MaterialIcons name="person" size={22} color="#000" />
+            </TouchableOpacity>
+          ),
           headerRight: () => (
             <TouchableOpacity
               onPress={() => router.push("/camera")}
