@@ -5,19 +5,24 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function FoodAddScreen() {
   const { imageUrl, itemName, nutrition } = useLocalSearchParams();
+  console.log('FoodAddScreen route params:', { imageUrl, itemName, nutritionPreview: nutrition ? (typeof nutrition === 'string' ? nutrition.slice(0, 120) + '...' : JSON.stringify(nutrition).slice(0,120) + '...') : null });
 
   const nutritionData = nutrition ? JSON.parse(nutrition as string) : null;
 
   // Compute macro totals (calories, protein, carbs, fat) across returned items
   const macroTotals = React.useMemo(() => {
     const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
-    if (!nutritionData || !nutritionData.items) return totals;
+    if (!nutritionData || !nutritionData.items) {
+      console.log('Parsed nutrition in FoodAddScreen: null or no items', nutritionData);
+      return totals;
+    }
     for (const it of nutritionData.items) {
       totals.calories += Number(it.calories || 0);
       totals.protein_g += Number(it.protein_g || 0);
       totals.carbs_g += Number(it.carbohydrates_total_g || 0);
       totals.fat_g += Number(it.fat_total_g || 0);
     }
+    console.log('Computed macroTotals in FoodAddScreen:', totals);
     return totals;
   }, [nutritionData]);
 
