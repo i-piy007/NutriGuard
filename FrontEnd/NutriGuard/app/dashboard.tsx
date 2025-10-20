@@ -9,6 +9,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from 'expo-router';
 import { Buffer } from 'buffer';
+import { styleText } from 'util';
 
 const Dashboard = () => {
     // Start from zeros and load stored totals (replace, don't add to defaults)
@@ -118,13 +119,6 @@ const Dashboard = () => {
         <View style={styles.container}>
             {/* Top: Calorie circular progress */}
             <View style={styles.topCard}>
-                <View style={{flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 16}}>
-                    <Text style={styles.topTitle}>Calorie</Text>
-                    <TouchableOpacity onPress={() => router.push('/login')} style={{padding: 8, backgroundColor: '#fff', borderRadius: 8}}>
-                        <Text>{username ? `Hi, ${username}` : 'User'}</Text>
-                    </TouchableOpacity>
-                </View>
-
                 <AnimatedCircularProgress
                     size={180}
                     width={14}
@@ -134,12 +128,12 @@ const Dashboard = () => {
                 >
                     {(fill: number) => (
                         <View style={styles.calorieInner}>
-                            <Text style={styles.topTitle}>Calories</Text>
                             <Text style={styles.calorieValue}>{Math.ceil(totals.calories)} kcal</Text>
                             <Text style={styles.calorieGoal}>/ {calorieGoal} kcal</Text>
                         </View>
                     )}
                 </AnimatedCircularProgress>
+                <Text style={styles.title}>Calories</Text>
             </View>
 
             {/* Macronutrient circular progress row */}
@@ -237,6 +231,7 @@ const Dashboard = () => {
                     <Text style={styles.title}>Fiber</Text>
                 </View>
             </View>
+
             {/* Bottom: BMI card (kept) */}
             <View style={styles.bottomCard}>
                     <Text style={styles.bottomTitle}>BMI</Text>
@@ -263,11 +258,6 @@ const styles = StyleSheet.create({
         paddingVertical: 30,
         alignItems: "center",
         marginBottom: 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 3,
-        elevation: 4,
     },
     topTitle: {
         fontSize: 28,
