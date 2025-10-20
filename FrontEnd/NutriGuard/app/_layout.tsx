@@ -14,9 +14,9 @@ export default function RootLayout() {
           headerTitleAlign: 'center',
           headerLeft: () => (
             <TouchableOpacity
-              onPress={() => router.push('/login')}
+              onPress={() => router.push('/user_profile')}
               style={{ paddingHorizontal: 12 }}
-              accessibilityLabel="Open user"
+              accessibilityLabel="Open user profile"
             >
               <MaterialIcons name="person" size={22} color="#000" />
             </TouchableOpacity>
