@@ -6,7 +6,7 @@ import os
 import logging
 import sqlite3
 import hashlib
-import jwt
+import jwt as pyjwt
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 import shutil
@@ -129,13 +129,20 @@ def hash_password(password: str) -> str:
 
 def create_token(user_id: int, email: str) -> str:
     payload = {"user_id": user_id, "email": email, "iat": datetime.utcnow().timestamp()}
-    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    # Use PyJWT encode — ensure the imported jwt module supports encode
+    if not getattr(pyjwt, "encode", None):
+        logger.error("Imported jwt module does not expose 'encode'. Is PyJWT installed?")
+        raise RuntimeError("JWT encode not available. Install PyJWT instead of jwt package.")
+    token = pyjwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    # PyJWT.encode may return bytes in some versions; coerce to str
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
     return token
 
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         return payload
     except Exception:
         return None
