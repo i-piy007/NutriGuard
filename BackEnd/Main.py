@@ -110,7 +110,7 @@ def create_db():
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         conn.commit()
 
-        # Populate username for existing users if empty: use part before @ from email or email itself
+            # Populate username for existing users if empty: use part before @ from email or email itself
         cur.execute("SELECT id, email, username FROM users")
         rows = cur.fetchall()
         for r in rows:
@@ -124,6 +124,22 @@ def create_db():
             if cur.fetchone():
                 candidate = f"{candidate}_{uid}"
             cur.execute("UPDATE users SET username = ? WHERE id = ?", (candidate, uid))
+        conn.commit()
+            # Ensure user profile columns exist (height, weight, gender, age)
+        cur.execute("PRAGMA table_info(users)")
+        cols_now = [r[1] for r in cur.fetchall()]
+        profile_cols = {
+            'height': 'REAL',
+            'weight': 'REAL',
+            'gender': 'TEXT',
+            'age': 'INTEGER'
+        }
+        for col, coltype in profile_cols.items():
+            if col not in cols_now:
+                try:
+                    cur.execute(f"ALTER TABLE users ADD COLUMN {col} {coltype}")
+                except Exception:
+                    logger.exception(f"Failed to add column {col}")
         conn.commit()
     except Exception:
         logger.exception('Error migrating/ensuring username column')
@@ -370,6 +386,92 @@ async def save_metrics(req: SaveMetricsRequest, authorization: Optional[str] = H
     for item in req.nutrition.get("items", []):
         add_meal_to_metric(metric_id, item)
     return {"status": "ok", "metric_id": metric_id}
+
+
+class UserProfileRequest(BaseModel):
+    name: Optional[str] = None
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+
+
+@app.get('/user/profile')
+async def get_user_profile(authorization: Optional[str] = Header(None)):
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail='Missing or invalid token')
+    user_id = int(payload.get('user_id'))
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    # If no DB row exists for this user id, return a default/empty profile
+    # so the client can show editable fields (None -> empty) and allow the user to save.
+    if not row:
+        logger.warning(f"User id={user_id} not found in DB; returning empty profile based on token payload")
+        return {
+            'id': user_id,
+            'email': payload.get('email'),
+            'username': payload.get('username'),
+            'name': payload.get('name') or None,
+            'height': None,
+            'weight': None,
+            'gender': None,
+            'age': None,
+        }
+    return {
+        'id': row[0],
+        'email': row[1],
+        'username': row[2],
+        'name': row[3],
+        'height': row[4],
+        'weight': row[5],
+        'gender': row[6],
+        'age': row[7]
+    }
+
+
+@app.post('/user/profile')
+async def update_user_profile(req: UserProfileRequest, authorization: Optional[str] = Header(None)):
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail='Missing or invalid token')
+    user_id = int(payload.get('user_id'))
+    # Validate fields minimally
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        # Build update dynamically
+        updates = []
+        params = []
+        if req.name is not None:
+            updates.append('name = ?')
+            params.append(req.name)
+        if req.height is not None:
+            updates.append('height = ?')
+            params.append(req.height)
+        if req.weight is not None:
+            updates.append('weight = ?')
+            params.append(req.weight)
+        if req.gender is not None:
+            updates.append('gender = ?')
+            params.append(req.gender)
+        if req.age is not None:
+            updates.append('age = ?')
+            params.append(req.age)
+        if updates:
+            params.append(user_id)
+            sql = 'UPDATE users SET ' + ', '.join(updates) + ' WHERE id = ?'
+            cur.execute(sql, params)
+            conn.commit()
+    except Exception:
+        logger.exception('Error updating profile')
+        raise HTTPException(status_code=500, detail='Failed to update profile')
+    finally:
+        conn.close()
+    return {'status': 'ok'}
 
 
 @app.get("/metrics/get")
