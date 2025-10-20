@@ -22,6 +22,18 @@ client = OpenAI(
 
 app = FastAPI()
 
+
+def summarize(obj, max_words=10):
+    """Return a short preview string for logging: first max_words of text or str(obj)."""
+    try:
+        s = str(obj)
+    except Exception:
+        return "<unserializable>"
+    words = s.split()
+    if len(words) <= max_words:
+        return s
+    return " ".join(words[:max_words]) + "..."
+
 # Create public directory if it doesn't exist
 public_dir = Path("public")
 public_dir.mkdir(exist_ok=True)
@@ -93,14 +105,13 @@ async def identify_food(request: ImageRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What object or item is shown in this image?"},
+                        {"type": "text", "text": "What Food items are in the image, give me a list of only names and the serving size. and if there is no food in the image then just repsond wih None"},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
             ],
         )
-
-        logger.info(f"Gemini response: {completion}")
+        logger.info(f"Gemini response: {summarize(completion)}")
 
         # Check for explicit errors returned by the client
         if getattr(completion, "error", None):
@@ -115,7 +126,7 @@ async def identify_food(request: ImageRequest):
         if not response_text:
             response_text = "Unable to identify item in the image."
 
-        logger.info(f"Final response text: {response_text}")
+        logger.info(f"Final response text: {summarize(response_text)}")
         return {"item_name": response_text}
 
     except Exception as e:
