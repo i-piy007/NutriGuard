@@ -1,70 +1,10 @@
-/*import { Text, View, StyleSheet } from "react-native";
-
-const Dashboard = () => {
-    return (
-        <View style={styles.container}>
-            <View style={styles.top}>
-                <Text style={styles.title}>Calorie</Text>
-                <Text style={styles.stat}>Protein</Text>
-                <Text style={styles.stat}>Carbohydrate</Text>
-                <Text style={styles.stat}>Fat</Text>
-                <Text style={styles.stat}>Sugar</Text>
-                <Text style={styles.stat}>Fiber</Text>
-            </View>
-
-            <View style={styles.bottom}>
-                <View style={styles.card}>
-                    <Text style={styles.cardText}>BMI</Text>
-                </View>
-            </View>
-        </View>
-    );
-};
-
-export default Dashboard;
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 16,
-        backgroundColor: '#fff',
-        justifyContent: 'space-between',
-    },
-    top: {
-        // takes remaining space above the bottom card
-    },
-    bottom: {
-        // bottom container; card will sit at the bottom because parent uses space-between
-    },
-    title: {
-        fontSize: 40,
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    stat: {
-        fontSize: 20,
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    card: {
-        backgroundColor: 'lightgrey',
-        padding: 20,
-        borderRadius: 20,
-        // cross-platform shadow
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    cardText: {
-        fontSize: 18,
-        textAlign: 'center',
-        fontWeight: '600',
-    },
-});*/
-
 import { Text, View, StyleSheet } from "react-native";
 import { useState, useCallback } from "react";
+// react-native-circular-progress may not include TypeScript types in this project.
+// Use a ts-ignore to avoid a compile-time error; consider installing types or
+// adding a declaration file if you want stricter typing.
+// @ts-ignore
+import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -101,39 +41,138 @@ const Dashboard = () => {
         }, [loadTotals])
     );
 
+    // Arbitrary daily goals (adjust as needed)
+    const calorieGoal = 2500; // kcal
+    const proteinGoal = 150; // grams
+    const carbsGoal = 300; // grams
+    const fatGoal = 70; // grams
+    const sugarGoal = 30; // grams
+    const fiberGoal = 25; // grams
+
+    const calorieFill = Math.min(100, (totals.calories / calorieGoal) * 100) || 0;
+    const proteinFill = Math.min(100, (totals.protein / proteinGoal) * 100) || 0;
+    const carbsFill = Math.min(100, (totals.carbs / carbsGoal) * 100) || 0;
+    const fatFill = Math.min(100, (totals.fat / fatGoal) * 100) || 0;
+    const sugarFill = Math.min(100, (totals.sugar / sugarGoal) * 100) || 0;
+    const fiberFill = Math.min(100, (totals.fiber / fiberGoal) * 100) || 0;
+
     return (
         <View style={styles.container}>
-            {/* Top: Calorie Card */}
+            {/* Top: Calorie circular progress */}
             <View style={styles.topCard}>
-                <Text style={styles.topTitle}>Calorie</Text>
-                <Text style={styles.topValue}>{Math.ceil(totals.calories)} kcal</Text>
+                <AnimatedCircularProgress
+                    size={180}
+                    width={14}
+                    fill={calorieFill}
+                    tintColor="#90be6d"
+                    backgroundColor="#f1f1f1"
+                >
+                    {(fill: number) => (
+                        <View style={styles.calorieInner}>
+                            <Text style={styles.topTitle}>Calories</Text>
+                            <Text style={styles.calorieValue}>{Math.ceil(totals.calories)} kcal</Text>
+                            <Text style={styles.calorieGoal}>/ {calorieGoal} kcal</Text>
+                        </View>
+                    )}
+                </AnimatedCircularProgress>
             </View>
 
-            {/* Middle: 3 per row grid */}
-            <View style={styles.middleGrid}>
-                <View style={styles.gridItem}>
+            {/* Macronutrient circular progress row */}
+            <View style={styles.macroRow}>
+                <View style={styles.macroItem}>
+                    <AnimatedCircularProgress
+                        size={120}
+                        width={10}
+                        fill={proteinFill}
+                        tintColor="#f94144"
+                        backgroundColor="#eee"
+                    >
+                        {(fill: number) => (
+                            <View style={styles.innerCircle}>
+                                <Text style={styles.macroValue}>{Math.ceil(totals.protein)}g</Text>
+                                <Text style={styles.macroGoal}>/ {proteinGoal}g</Text>
+                            </View>
+                        )}
+                    </AnimatedCircularProgress>
                     <Text style={styles.title}>Protein</Text>
-                    <Text style={styles.value}>{Math.ceil(totals.protein)} g</Text>
                 </View>
-                <View style={styles.gridItem}>
+
+                <View style={styles.macroItem}>
+                    <AnimatedCircularProgress
+                        size={120}
+                        width={10}
+                        fill={carbsFill}
+                        tintColor="#577590"
+                        backgroundColor="#eee"
+                    >
+                        {(fill: number) => (
+                            <View style={styles.innerCircle}>
+                                <Text style={styles.macroValue}>{Math.ceil(totals.carbs)}g</Text>
+                                <Text style={styles.macroGoal}>/ {carbsGoal}g</Text>
+                            </View>
+                        )}
+                    </AnimatedCircularProgress>
                     <Text style={styles.title}>Carbohydrate</Text>
-                    <Text style={styles.value}>{Math.ceil(totals.carbs)} g</Text>
                 </View>
-                <View style={styles.gridItem}>
+
+                <View style={styles.macroItem}>
+                    <AnimatedCircularProgress
+                        size={120}
+                        width={10}
+                        fill={fatFill}
+                        tintColor="#f3722c"
+                        backgroundColor="#eee"
+                    >
+                        {(fill: number) => (
+                            <View style={styles.innerCircle}>
+                                <Text style={styles.macroValue}>{Math.ceil(totals.fat)}g</Text>
+                                <Text style={styles.macroGoal}>/ {fatGoal}g</Text>
+                            </View>
+                        )}
+                    </AnimatedCircularProgress>
                     <Text style={styles.title}>Fat</Text>
-                    <Text style={styles.value}>{Math.ceil(totals.fat)} g</Text>
-                </View>
-                <View style={styles.gridItem}>
-                    <Text style={styles.title}>Sugar</Text>
-                    <Text style={styles.value}>{Math.ceil(totals.sugar)} g</Text>
-                </View>
-                <View style={styles.gridItem}>
-                    <Text style={styles.title}>Fiber</Text>
-                    <Text style={styles.value}>{Math.ceil(totals.fiber)} g</Text>
                 </View>
             </View>
 
-            {/* Bottom: BMI card */}
+            {/* Sugar & Fiber row (below macros) */}
+            <View style={styles.microRow}>
+                <View style={styles.microItem}>
+                    <AnimatedCircularProgress
+                        size={100}
+                        width={8}
+                        fill={sugarFill}
+                        tintColor="#f3722c"
+                        backgroundColor="#eee"
+                    >
+                        {(fill: number) => (
+                            <View style={styles.innerCircle}>
+                                <Text style={styles.macroValue}>{Math.ceil(totals.sugar)}g</Text>
+                                <Text style={styles.macroGoal}>/ {sugarGoal}g</Text>
+                            </View>
+                        )}
+                    </AnimatedCircularProgress>
+                    <Text style={styles.title}>Sugar</Text>
+                </View>
+
+                <View style={styles.microItem}>
+                    <AnimatedCircularProgress
+                        size={100}
+                        width={8}
+                        fill={fiberFill}
+                        tintColor="#577590"
+                        backgroundColor="#eee"
+                    >
+                        {(fill: number) => (
+                            <View style={styles.innerCircle}>
+                                <Text style={styles.macroValue}>{Math.ceil(totals.fiber)}g</Text>
+                                <Text style={styles.macroGoal}>/ {fiberGoal}g</Text>
+                            </View>
+                        )}
+                    </AnimatedCircularProgress>
+                    <Text style={styles.title}>Fiber</Text>
+                </View>
+            </View>
+            {/* Bottom: BMI card (kept) */}
             <View style={styles.bottomCard}>
                 <Text style={styles.bottomTitle}>BMI</Text>
                 <Text style={styles.bottomValue}>22.5</Text>
@@ -154,7 +193,7 @@ const styles = StyleSheet.create({
 
     // === Top Card ===
     topCard: {
-        backgroundColor: "#f9c74f",
+        backgroundColor: "#fff",
         borderRadius: 20,
         paddingVertical: 30,
         alignItems: "center",
@@ -174,6 +213,62 @@ const styles = StyleSheet.create({
         fontSize: 20,
         color: "#555",
         marginTop: 6,
+    },
+
+    // === Macro row / circular progress ===
+    macroRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    macroItem: {
+        width: '32%',
+        alignItems: 'center',
+    },
+    innerCircle: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    macroValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#333',
+    },
+    macroGoal: {
+        fontSize: 12,
+        color: '#666',
+    },
+
+    // === Calorie circular inner ===
+    calorieInner: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    calorieValue: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#333',
+        marginTop: 6,
+    },
+    calorieGoal: {
+        fontSize: 12,
+        color: '#666',
+    },
+
+    // === Micro row for sugar & fiber ===
+    microRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    microItem: {
+        alignItems: 'center',
+        width: '45%',
     },
 
     // === Middle Grid ===
