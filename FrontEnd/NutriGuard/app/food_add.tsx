@@ -66,9 +66,27 @@ export default function FoodAddScreen() {
         totals.fiber += add.fiber;
       }
 
-      // Save updated totals
+      // Save updated totals locally
       await AsyncStorage.setItem("nutritionTotals", JSON.stringify(totals));
       console.log("Updated totals:", totals);
+
+      // Also POST the metrics to backend if user is logged in
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          const saveBody = { day: new Date().toISOString().slice(0, 10), nutrition: nutritionData };
+          const resp = await fetch('https://nutriguard-n98n.onrender.com/metrics/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(saveBody),
+          });
+          const j = await resp.json();
+          console.log('Saved metrics server response:', j);
+        }
+      } catch (e) {
+        console.warn('Failed to save metrics to server:', e);
+      }
+
       router.back();
     } catch (error) {
       console.error("Error saving data:", error);
