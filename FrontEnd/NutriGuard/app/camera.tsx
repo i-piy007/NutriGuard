@@ -75,6 +75,13 @@ export default function CameraScreen() {
 
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
+      // Log a short preview of nutrition if present
+      try {
+        const nutritionPreview = identifyData?.nutrition ? JSON.stringify(identifyData.nutrition).slice(0, 120) + '...' : 'null';
+        console.log('Nutrition preview:', nutritionPreview);
+      } catch (e) {
+        console.log('Error previewing nutrition:', e);
+      }
       // Navigate to food_add with data
       router.push({
         pathname: "/food_add",
