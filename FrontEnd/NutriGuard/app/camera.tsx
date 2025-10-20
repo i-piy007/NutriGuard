@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from "react-native";
 import { Camera, CameraView } from "expo-camera";
+import { router } from "expo-router";
 
 export default function CameraScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
@@ -74,7 +75,15 @@ export default function CameraScreen() {
 
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
-      Alert.alert("Success", `Item identified: ${identifyData.item_name}`);
+      // Navigate to food_add with data
+      router.push({
+        pathname: "/food_add",
+        params: {
+          imageUrl: imageUrl,
+          itemName: identifyData.item_name,
+          nutrition: JSON.stringify(identifyData.nutrition),
+        },
+      });
 
     } catch (error) {
       console.error("Error in takePictureAndUpload:", error);
