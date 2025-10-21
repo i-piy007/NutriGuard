@@ -1,9 +1,11 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function FoodAddScreen() {
+  const insets = useSafeAreaInsets();
   const { imageUrl, itemName, nutrition } = useLocalSearchParams();
   console.log('FoodAddScreen route params:', { imageUrl, itemName, nutritionPreview: nutrition ? (typeof nutrition === 'string' ? nutrition.slice(0, 120) + '...' : JSON.stringify(nutrition).slice(0,120) + '...') : null });
 
@@ -136,9 +138,17 @@ export default function FoodAddScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-        <Text style={styles.addButtonText}>Add to Dashboard</Text>
-      </TouchableOpacity>
+      <SafeAreaView edges={["bottom"]} style={{ backgroundColor: 'transparent' }}>
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            { marginBottom: Math.max(12, insets.bottom) }
+          ]}
+          onPress={handleAdd}
+        >
+          <Text style={styles.addButtonText}>Add to Dashboard</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     </ScrollView>
   );
 }
