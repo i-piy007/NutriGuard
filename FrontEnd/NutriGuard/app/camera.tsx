@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from "react-native";
+import { MaterialIcons } from '@expo/vector-icons';
 import { Camera, CameraView } from "expo-camera";
 import { router } from "expo-router";
 
@@ -133,7 +134,7 @@ export default function CameraScreen() {
           {loading && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>Processing image...</Text>
+              <Text style={styles.loadingText}>Processing your food image...</Text>
             </View>
           )}
         </View>
@@ -143,14 +144,18 @@ export default function CameraScreen() {
 
       <View style={styles.controls}>
         {loading ? (
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="transparent"/>
         ) : capturedImage ? (
           <TouchableOpacity style={styles.button} onPress={() => setCapturedImage(null)}>
             <Text style={styles.buttonText}>Retake</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.button} onPress={takePictureAndUpload}>
-            <Text style={styles.buttonText}>Take Picture & Upload</Text>
+          <TouchableOpacity
+            style={styles.captureButton}
+            onPress={takePictureAndUpload}
+            accessibilityLabel="Take picture and upload"
+          >
+            <MaterialIcons name="photo-camera" size={45} color="#fff" />
           </TouchableOpacity>
         )}
       </View>
@@ -177,6 +182,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
+  captureButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
   loadingOverlay: {
     position: "absolute",
     top: 0,
@@ -189,7 +207,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 20,
     marginTop: 10,
   },  
 });

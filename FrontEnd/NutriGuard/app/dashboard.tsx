@@ -123,8 +123,9 @@ const Dashboard = () => {
                     size={180}
                     width={14}
                     fill={calorieFill}
-                    tintColor="#90be6d"
+                    tintColor={totals.calories > calorieGoal ? '#ff4d4d' : '#90be6d'}
                     backgroundColor="#f1f1f1"
+                    rotation={0}
                 >
                     {(fill: number) => (
                         <View style={styles.calorieInner}>
@@ -143,8 +144,9 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={proteinFill}
-                        tintColor="lightblue"
+                        tintColor={totals.protein > proteinGoal ? '#ff4d4d' : '#4cc9f0'}
                         backgroundColor="#eee"
+                        rotation={0}
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -161,8 +163,9 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={carbsFill}
-                        tintColor="#577590"
+                        tintColor={totals.carbs > carbsGoal ? '#ff4d4d' : '#577590'}
                         backgroundColor="#eee"
+                        rotation={0}
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -179,8 +182,9 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={fatFill}
-                        tintColor="#f3722c"
+                        tintColor={totals.fat > fatGoal ? '#ff4d4d' : '#4cc9f0'}
                         backgroundColor="#eee"
+                        rotation={0}
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -192,16 +196,17 @@ const Dashboard = () => {
                     <Text style={styles.title}>Fat</Text>
                 </View>
             </View>
-
-            {/* Sugar & Fiber row (below macros) */}
+            
+            {/* Micro-nutrient circular progress row (Sugar & Fiber) */}
             <View style={styles.microRow}>
                 <View style={styles.microItem}>
                     <AnimatedCircularProgress
                         size={100}
                         width={8}
                         fill={sugarFill}
-                        tintColor="#f3722c"
+                        tintColor={totals.sugar > sugarGoal ? '#ff4d4d' : '#577590'}
                         backgroundColor="#eee"
+                        rotation={0}
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -218,8 +223,9 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={fiberFill}
-                        tintColor="#577590"
+                        tintColor={totals.fiber > fiberGoal ? '#ff4d4d' : '#4cc9f0'}
                         backgroundColor="#eee"
+                        rotation={0}
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -386,11 +392,11 @@ const styles = StyleSheet.create({
     bottomTitle: {
         fontSize: 24,
         fontWeight: "700",
-        color: "#fff",
+        color: "#000000",
     },
     bottomValue: {
         fontSize: 18,
-        color: "#fff",
+        color: "#000000",
         marginTop: 6,
     },
 });
