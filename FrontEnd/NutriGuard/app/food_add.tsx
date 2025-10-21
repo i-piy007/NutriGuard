@@ -89,7 +89,14 @@ export default function FoodAddScreen() {
         console.warn('Failed to save metrics to server:', e);
       }
 
-      router.back();
+      // After saving, navigate to the dashboard to show updated totals
+      try {
+        router.replace('/dashboard');
+      } catch (navErr) {
+        // Fallback to back if replace fails for some reason
+        console.warn('router.replace failed, falling back to back()', navErr);
+        router.back();
+      }
     } catch (error) {
       console.error("Error saving data:", error);
     }
