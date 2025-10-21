@@ -103,7 +103,8 @@ export default function FoodAddScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent} style={styles.container}>
       <Text style={styles.title}>Food Identified</Text>
       {imageUrl && <Image source={{ uri: imageUrl as string }} style={styles.image} />}
       <Text style={styles.itemName}>{itemName}</Text>
@@ -145,18 +146,25 @@ export default function FoodAddScreen() {
         </View>
       )}
 
-      <SafeAreaView edges={["bottom"]} style={{ backgroundColor: 'transparent' }}>
+      </ScrollView>
+
+      {/* Floating add button placed above navigation bar and content */}
+      <SafeAreaView
+        edges={["bottom"]}
+        style={[
+          styles.floatingSafeArea,
+          { paddingBottom: Math.max(12, insets.bottom) }
+        ]}
+        pointerEvents="box-none"
+      >
         <TouchableOpacity
-          style={[
-            styles.addButton,
-            { marginBottom: Math.max(12, insets.bottom) }
-          ]}
+          style={styles.addButton}
           onPress={handleAdd}
         >
           <Text style={styles.addButtonText}>Add to Dashboard</Text>
         </TouchableOpacity>
       </SafeAreaView>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -200,12 +208,13 @@ const styles = StyleSheet.create({
   addButton: {
     backgroundColor: "#007AFF",
     paddingVertical: 15,
+    paddingHorizontal: 36,
     borderRadius: 8,
     alignItems: "center",
   },
   addButtonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "bold",
   },
   macroSummary: {
@@ -232,5 +241,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#333",
+  },
+  scrollContent: {
+    paddingBottom: 150, // space for floating button
+  },
+  floatingSafeArea: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    zIndex: 999,
+    elevation: 12,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
   },
 });

@@ -123,7 +123,7 @@ const Dashboard = () => {
                     size={180}
                     width={14}
                     fill={calorieFill}
-                    tintColor={totals.calories > calorieGoal ? '#ff4d4d' : '#90be6d'}
+                    tintColor={totals.calories > calorieGoal ? '#f40000ff' : '#90be6d'}
                     backgroundColor="#f1f1f1"
                     rotation={0}
                 >
@@ -144,7 +144,7 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={proteinFill}
-                        tintColor={totals.protein > proteinGoal ? '#ff4d4d' : '#4cc9f0'}
+                        tintColor={totals.protein > proteinGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
                     >
@@ -163,7 +163,7 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={carbsFill}
-                        tintColor={totals.carbs > carbsGoal ? '#ff4d4d' : '#577590'}
+                        tintColor={totals.carbs > carbsGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
                         rotation={0}
                     >
@@ -182,7 +182,7 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={fatFill}
-                        tintColor={totals.fat > fatGoal ? '#ff4d4d' : '#4cc9f0'}
+                        tintColor={totals.fat > fatGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
                     >
@@ -204,7 +204,7 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={sugarFill}
-                        tintColor={totals.sugar > sugarGoal ? '#ff4d4d' : '#577590'}
+                        tintColor={totals.sugar > sugarGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
                         rotation={0}
                     >
@@ -223,7 +223,7 @@ const Dashboard = () => {
                         size={100}
                         width={8}
                         fill={fiberFill}
-                        tintColor={totals.fiber > fiberGoal ? '#ff4d4d' : '#4cc9f0'}
+                        tintColor={totals.fiber > fiberGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
                     >
