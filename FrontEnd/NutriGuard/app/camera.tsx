@@ -8,6 +8,7 @@ export default function CameraScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [flashMode, setFlashMode] = useState<'off' | 'on'>('off');
   const cameraRef = useRef<any>(null);
   const { mode } = useLocalSearchParams(); // Get mode parameter from URL
 
@@ -19,28 +20,35 @@ export default function CameraScreen() {
     })();
   }, []);
 
-  const takePictureAndUpload = async () => {
+  const takePicture = async () => {
     if (!cameraRef.current) {
       console.log("Camera ref is null, cannot take picture");
       return;
     }
-    setLoading(true);
-    console.log("Starting picture capture and upload");
-
+    console.log("Taking picture...");
     try {
-      // Take picture
-      console.log("Taking picture...");
       const photo = await cameraRef.current.takePictureAsync({ base64: false });
       console.log("Photo captured:", photo.uri.slice(0, 10) + "...");
       setCapturedImage(photo.uri);
+    } catch (error) {
+      console.error("Error taking picture:", error);
+      Alert.alert("Error", "Failed to take picture");
+    }
+  };
 
-      // Prepare form data
-      console.log("Preparing form data...");
+  const confirmAndUpload = async () => {
+    if (!capturedImage) return;
+    setLoading(true);
+    console.log("Starting upload and processing");
+
+    try {
+      // Create form data
+      console.log("Creating FormData...");
       const formData = new FormData();
       formData.append("file", {
-        uri: photo.uri,
-        name: "photo.jpg",
+        uri: capturedImage,
         type: "image/jpeg",
+        name: "photo.jpg",
       } as any);
       console.log("Form data prepared");
 
@@ -158,28 +166,72 @@ export default function CameraScreen() {
               <Text style={styles.loadingText}>Processing your food image...</Text>
             </View>
           )}
+          {!loading && (
+            <View style={styles.controlPanel}>
+              <View style={styles.previewControls}>
+                <TouchableOpacity
+                  style={styles.retakeButton}
+                  onPress={() => setCapturedImage(null)}
+                >
+                  <MaterialIcons name="close" size={40} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={confirmAndUpload}
+                >
+                  <MaterialIcons name="check" size={40} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       ) : (
-        React.createElement(CameraView as any, { style: styles.camera, ref: cameraRef })
+        <>
+          <CameraView
+            style={styles.camera}
+            ref={cameraRef}
+            facing="back"
+            flash={flashMode}
+          />
+          {/* Grid overlay */}
+          <View style={styles.gridOverlay}>
+            {/* Vertical lines */}
+            <View style={[styles.gridLine, styles.gridLineVertical, { left: '33.33%' }]} />
+            <View style={[styles.gridLine, styles.gridLineVertical, { left: '66.66%' }]} />
+            {/* Horizontal lines */}
+            <View style={[styles.gridLine, styles.gridLineHorizontal, { top: '33.33%' }]} />
+            <View style={[styles.gridLine, styles.gridLineHorizontal, { top: '66.66%' }]} />
+          </View>
+          {/* Camera controls panel */}
+          <View style={styles.controlPanel}>
+            <View style={styles.cameraControls}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={() => setFlashMode(flashMode === 'off' ? 'on' : 'off')}
+              >
+                <MaterialIcons 
+                  name={flashMode === 'on' ? 'flash-on' : 'flash-off'} 
+                  size={30} 
+                  color="#fff" 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={takePicture}
+                accessibilityLabel="Take picture"
+              >
+                <MaterialIcons name="photo-camera" size={45} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={() => {}}
+              >
+                <MaterialIcons name="image" size={30} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
       )}
-
-      <View style={styles.controls}>
-        {loading ? (
-          <ActivityIndicator size="large" color="transparent"/>
-        ) : capturedImage ? (
-          <TouchableOpacity style={styles.button} onPress={() => setCapturedImage(null)}>
-            <Text style={styles.buttonText}>Retake</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.captureButton}
-            onPress={takePictureAndUpload}
-            accessibilityLabel="Take picture and upload"
-          >
-            <MaterialIcons name="photo-camera" size={45} color="#fff" />
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 }
@@ -204,9 +256,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   captureButton: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -230,5 +282,86 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 20,
     marginTop: 10,
-  },  
+  },
+  gridOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 140,
+    pointerEvents: 'none',
+  },
+  gridLine: {
+    position: 'absolute',
+    backgroundColor: '#fff',
+    opacity: 0.5,
+  },
+  gridLineVertical: {
+    width: 2,
+    height: '100%',
+  },
+  gridLineHorizontal: {
+    height: 2,
+    width: '100%',
+  },
+  controlPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(30, 30, 30, 0.98)',
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  cameraControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  previewControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  controlButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  retakeButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  confirmButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
 });

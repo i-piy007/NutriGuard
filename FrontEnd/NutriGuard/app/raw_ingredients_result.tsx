@@ -6,13 +6,20 @@ import { MaterialIcons } from '@expo/vector-icons';
 export default function RawIngredientsResult() {
   const params = useLocalSearchParams();
   const imageUrl = params.imageUrl as string;
+  const fromHistory = params.fromHistory as string; // Flag to indicate if opened from history
 
   type Dish = { name: string; description?: string; justification?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
 
-  // Save to history on mount (once)
+  // Save to history on mount (once) - but only if not opened from history
   React.useEffect(() => {
     (async () => {
       try {
+        // Don't save to history if we're viewing from history
+        if (fromHistory === 'true') {
+          console.log('Skipping history save - opened from history');
+          return;
+        }
+        
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
         const token = await AsyncStorage.getItem('token');
         if (token && params.ingredients && params.dishes) {

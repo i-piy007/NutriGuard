@@ -122,6 +122,32 @@ export default function UserProfile() {
     router.push({ pathname: '/food_add', params: { imageUrl: 'https://indiaforbeginners.com/wp-content/uploads/2020/04/India-for-Beginners-custom-tours-8.jpg', itemName: 'Development Sample', nutrition: JSON.stringify(dummyNutrition) } });
   };
 
+  const handleOpenDevRawIngredients = async () => {
+    const dummyIngredients = ['Tomatoes', 'Onions', 'Garlic', 'Bell Peppers', 'Chicken Breast'];
+    const dummyDishes = [
+      {
+        name: 'Chicken Stir Fry',
+        description: 'A healthy and quick stir fry with vegetables',
+        justification: 'Perfect for dinner time with balanced protein and vegetables',
+        image_url: 'https://www.southernliving.com/thmb/x5c8PFlEHjDCn0L5AmS_i_jCMw8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Extra_Easy_Chicken_Stir-fry_014-d77baf5fc67c4cf6b0b1f3ce2c72c2e9.jpg'
+      },
+      {
+        name: 'Stuffed Bell Peppers',
+        description: 'Bell peppers stuffed with seasoned chicken and vegetables',
+        justification: 'Low-carb option ideal for diabetic users',
+        image_url: 'https://www.allrecipes.com/thmb/LwZ0vZoqgz2z-gSzLkR9xaXl_bw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/22065-stuffed-peppers-DDMFS-4x3-1140-84d321bad90e4e82a8d2a0d4ce093e2f.jpg'
+      }
+    ];
+    router.push({ 
+      pathname: '/raw_ingredients_result', 
+      params: { 
+        imageUrl: 'https://www.southernliving.com/thmb/x5c8PFlEHjDCn0L5AmS_i_jCMw8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Extra_Easy_Chicken_Stir-fry_014-d77baf5fc67c4cf6b0b1f3ce2c72c2e9.jpg',
+        ingredients: JSON.stringify(dummyIngredients),
+        dishes: JSON.stringify(dummyDishes)
+      } 
+    });
+  };
+
   if (!token) {
     return (
       <View style={styles.notSignedInContainer}>
@@ -285,6 +311,20 @@ export default function UserProfile() {
             >
               <MaterialIcons name="code" size={22} color="#4cc9f0" />
               <Text style={styles.actionButtonText}>Open Dev FoodAdd</Text>
+              <MaterialIcons name="chevron-right" size={22} color="#ccc" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                Alert.alert('Dev Mode', 'Open Raw Ingredients screen with sample data?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Open', onPress: handleOpenDevRawIngredients }
+                ]);
+              }}
+            >
+              <MaterialIcons name="restaurant-menu" size={22} color="#90be6d" />
+              <Text style={styles.actionButtonText}>Open Dev Raw Ingredients</Text>
               <MaterialIcons name="chevron-right" size={22} color="#ccc" />
             </TouchableOpacity>
 

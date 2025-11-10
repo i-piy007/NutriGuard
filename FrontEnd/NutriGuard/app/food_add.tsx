@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function FoodAddScreen() {
   const insets = useSafeAreaInsets();
-  const { imageUrl, itemName, nutrition } = useLocalSearchParams();
+  const { imageUrl, itemName, nutrition, fromHistory } = useLocalSearchParams();
   console.log('FoodAddScreen route params:', { imageUrl, itemName, nutritionPreview: nutrition ? (typeof nutrition === 'string' ? nutrition.slice(0, 120) + '...' : JSON.stringify(nutrition).slice(0,120) + '...') : null });
 
   const nutritionData = nutrition ? JSON.parse(nutrition as string) : null;
@@ -85,20 +85,24 @@ export default function FoodAddScreen() {
           const j = await resp.json();
           console.log('Saved metrics server response:', j);
 
-          // Save to history
-          try {
-            await fetch('https://nutriguard-n98n.onrender.com/history/save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({
-                image_url: imageUrl,
-                scan_type: 'food',
-                result_json: JSON.stringify({ itemName, nutrition: nutritionData })
-              })
-            });
-            console.log('Saved food scan to history');
-          } catch (histErr) {
-            console.warn('Failed to save to history:', histErr);
+          // Save to history - but only if not opened from history
+          if (fromHistory !== 'true') {
+            try {
+              await fetch('https://nutriguard-n98n.onrender.com/history/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  image_url: imageUrl,
+                  scan_type: 'food',
+                  result_json: JSON.stringify({ itemName, nutrition: nutritionData })
+                })
+              });
+              console.log('Saved food scan to history');
+            } catch (histErr) {
+              console.warn('Failed to save to history:', histErr);
+            }
+          } else {
+            console.log('Skipping history save - opened from history');
           }
         }
       } catch (e) {

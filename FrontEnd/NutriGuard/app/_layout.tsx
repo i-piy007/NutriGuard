@@ -35,8 +35,13 @@ export default function RootLayout() {
       <Stack.Screen
         name="camera"
         options={{
-          title: "Camera",
-          headerShown: true,
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="user_profile"
+        options={{
+          headerShown: false,
         }}
       />
     </Stack>

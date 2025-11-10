@@ -66,7 +66,8 @@ export default function History() {
           params: {
             imageUrl: item.image_url,
             itemName: parsed.itemName || 'Food',
-            nutrition: JSON.stringify(parsed.nutrition || {})
+            nutrition: JSON.stringify(parsed.nutrition || {}),
+            fromHistory: 'true'
           }
         });
       } else if (item.scan_type === 'raw_ingredients') {
@@ -74,8 +75,9 @@ export default function History() {
           pathname: '/raw_ingredients_result',
           params: {
             imageUrl: item.image_url,
-            ingredients: parsed.ingredients || '[]',
-            dishes: parsed.dishes || '[]'
+            ingredients: JSON.stringify(parsed.ingredients || []),
+            dishes: JSON.stringify(parsed.dishes || []),
+            fromHistory: 'true'
           }
         });
       }

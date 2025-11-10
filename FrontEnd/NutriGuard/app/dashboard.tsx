@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity, Image } from "react-native";
 // react-native-circular-progress may not include TypeScript types in this project.
 // Use a ts-ignore to avoid a compile-time error; consider installing types or
 // adding a declaration file if you want stricter typing.
@@ -122,11 +122,12 @@ const Dashboard = () => {
             <View style={styles.topCard}>
                 <AnimatedCircularProgress
                     size={180}
-                    width={14}
+                    width={18}
                     fill={calorieFill}
                     tintColor={totals.calories > calorieGoal ? '#f40000ff' : '#90be6d'}
                     backgroundColor="#f1f1f1"
                     rotation={0}
+                    lineCap="round"
                 >
                     {(fill: number) => (
                         <View style={styles.calorieInner}>
@@ -143,11 +144,12 @@ const Dashboard = () => {
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
                         size={100}
-                        width={8}
+                        width={12}
                         fill={proteinFill}
                         tintColor={totals.protein > proteinGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
+                        lineCap="round"
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -162,11 +164,12 @@ const Dashboard = () => {
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
                         size={100}
-                        width={8}
+                        width={12}
                         fill={carbsFill}
                         tintColor={totals.carbs > carbsGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
                         rotation={0}
+                        lineCap="round"
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -181,11 +184,12 @@ const Dashboard = () => {
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
                         size={100}
-                        width={8}
+                        width={12}
                         fill={fatFill}
                         tintColor={totals.fat > fatGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
+                        lineCap="round"
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -203,11 +207,12 @@ const Dashboard = () => {
                 <View style={styles.microItem}>
                     <AnimatedCircularProgress
                         size={100}
-                        width={8}
+                        width={12}
                         fill={sugarFill}
                         tintColor={totals.sugar > sugarGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
                         rotation={0}
+                        lineCap="round"
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -222,11 +227,12 @@ const Dashboard = () => {
                 <View style={styles.microItem}>
                     <AnimatedCircularProgress
                         size={100}
-                        width={8}
+                        width={12}
                         fill={fiberFill}
                         tintColor={totals.fiber > fiberGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
                         rotation={0}
+                        lineCap="round"
                     >
                         {(fill: number) => (
                             <View style={styles.innerCircle}>
@@ -254,7 +260,7 @@ const Dashboard = () => {
                     onPress={() => router.push('/camera')}
                     accessibilityLabel="Open camera"
                 >
-                    <MaterialIcons name="photo-camera" size={25} color="#000" />
+                    <MaterialIcons name="photo-camera" size={40} color="#000" style={{ opacity: 0.75 }} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -262,7 +268,11 @@ const Dashboard = () => {
                     onPress={() => router.push({ pathname: '/camera', params: { mode: 'raw_ingredients' } })}
                     accessibilityLabel="Open raw ingredients scanner"
                 >
-                    <Text style={styles.actionTitle}>Raw Ingredients</Text>
+                    <Image 
+                        source={require('../cooking_logo.png')} 
+                        style={{ width: 70, height: 70, opacity: 0.85 }}
+                        resizeMode="contain"
+                    />
                 </TouchableOpacity>
             </View>
         </View>
@@ -333,13 +343,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     calorieValue: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: '700',
         color: '#333',
         marginTop: 6,
     },
     calorieGoal: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#666',
     },
 
