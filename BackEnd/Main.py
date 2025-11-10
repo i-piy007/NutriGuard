@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 CALORIENINJAS_API_KEY = os.getenv("CALORIENINJAS_API_KEY")
-SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY") or "003cce6f9e8a4832937fa8bd9b2356f9"  # temporary fallback per user instruction
+SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY")  # temporary fallback per user instruction
 logger.info(f"OPENROUTER_API_KEY set: {bool(OPENROUTER_API_KEY)}")
 logger.info(f"CALORIENINJAS_API_KEY set: {bool(CALORIENINJAS_API_KEY)}")
 logger.info(f"SPOONACULAR_API_KEY set: {bool(SPOONACULAR_API_KEY)}")
