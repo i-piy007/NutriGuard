@@ -140,14 +140,15 @@ def create_db():
             cur.execute("UPDATE users SET username = ? WHERE id = ?", (candidate, uid))
         conn.commit()
 
-        # Ensure user profile columns exist (height, weight, gender, age)
+        # Ensure user profile columns exist (height, weight, gender, age, is_diabetic)
         cur.execute("PRAGMA table_info(users)")
         cols_now = [r[1] for r in cur.fetchall()]
         profile_cols = {
             'height': 'REAL',
             'weight': 'REAL',
             'gender': 'TEXT',
-            'age': 'INTEGER'
+            'age': 'INTEGER',
+            'is_diabetic': 'INTEGER'  # 0 or 1 (boolean)
         }
         for col, coltype in profile_cols.items():
             if col not in cols_now:
@@ -520,6 +521,7 @@ class UserProfileRequest(BaseModel):
     weight: Optional[float] = None
     gender: Optional[str] = None
     age: Optional[int] = None
+    is_diabetic: Optional[bool] = None
 
 
 @app.get('/user/profile')
@@ -530,7 +532,7 @@ async def get_user_profile(authorization: Optional[str] = Header(None)):
     user_id = int(payload.get('user_id'))
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (user_id,))
+    cur.execute('SELECT id, email, username, name, height, weight, gender, age, is_diabetic FROM users WHERE id = ?', (user_id,))
     row = cur.fetchone()
     conn.close()
     # If no DB row exists for this user id, return a default/empty profile
@@ -546,6 +548,7 @@ async def get_user_profile(authorization: Optional[str] = Header(None)):
             'weight': None,
             'gender': None,
             'age': None,
+            'is_diabetic': None,
         }
     return {
         'id': row[0],
@@ -555,7 +558,8 @@ async def get_user_profile(authorization: Optional[str] = Header(None)):
         'height': row[4],
         'weight': row[5],
         'gender': row[6],
-        'age': row[7]
+        'age': row[7],
+        'is_diabetic': bool(row[8]) if row[8] is not None else None
     }
 
 
@@ -587,6 +591,9 @@ async def update_user_profile(req: UserProfileRequest, authorization: Optional[s
         if req.age is not None:
             updates.append('age = ?')
             params.append(req.age)
+        if req.is_diabetic is not None:
+            updates.append('is_diabetic = ?')
+            params.append(1 if req.is_diabetic else 0)
         target_id = user_id
         # If the user row for this id does not exist, try to find by username or email from token
         cur.execute('SELECT id FROM users WHERE id = ?', (user_id,))
@@ -629,13 +636,13 @@ async def update_user_profile(req: UserProfileRequest, authorization: Optional[s
             cur.execute(sql, params)
             conn.commit()
         # Return the upserted profile
-        cur.execute('SELECT id, email, username, name, height, weight, gender, age FROM users WHERE id = ?', (target_id,))
+        cur.execute('SELECT id, email, username, name, height, weight, gender, age, is_diabetic FROM users WHERE id = ?', (target_id,))
         row = cur.fetchone()
         profile = None
         if row:
-            profile = {'id': row[0], 'email': row[1], 'username': row[2], 'name': row[3], 'height': row[4], 'weight': row[5], 'gender': row[6], 'age': row[7]}
+            profile = {'id': row[0], 'email': row[1], 'username': row[2], 'name': row[3], 'height': row[4], 'weight': row[5], 'gender': row[6], 'age': row[7], 'is_diabetic': bool(row[8]) if row[8] is not None else None}
         else:
-            profile = {'id': target_id, 'email': payload.get('email'), 'username': payload.get('username'), 'name': req.name or None, 'height': None, 'weight': None, 'gender': None, 'age': None}
+            profile = {'id': target_id, 'email': payload.get('email'), 'username': payload.get('username'), 'name': req.name or None, 'height': None, 'weight': None, 'gender': None, 'age': None, 'is_diabetic': None}
     except Exception:
         logger.exception('Error updating profile')
         raise HTTPException(status_code=500, detail='Failed to update profile')
@@ -738,7 +745,7 @@ async def identify_food(request: ImageRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size in 10-20 words nothing extra. and if there is no food in the image then just repsond wih UnKnown"},
+                        {"type": "text", "text": "What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size in 10-20 words nothing extra. DO not mention stuff like condiments and leaves and stuff like that. If there is no food in the image then just respond with Unknown"},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
@@ -852,9 +859,31 @@ class ImageURLRequest(BaseModel):
 
 
 @app.post("/identify-raw-ingredients")
-async def identify_raw_ingredients(request: ImageRequest):
+async def identify_raw_ingredients(request: ImageRequest, authorization: Optional[str] = Header(None)):
     """Endpoint for analyzing raw ingredients and suggesting dishes that can be made."""
     logger.info(f"[identify-raw-ingredients] Received request for URL: {request.image_url}")
+    
+    # Fetch user profile for personalized recommendations
+    user_profile = None
+    payload = get_user_from_auth_header(authorization)
+    if payload:
+        user_id = int(payload.get("user_id"))
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute('SELECT age, gender, is_diabetic FROM users WHERE id = ?', (user_id,))
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                user_profile = {
+                    'age': row[0],
+                    'gender': row[1],
+                    'is_diabetic': bool(row[2]) if row[2] is not None else False
+                }
+                logger.info(f"[identify-raw-ingredients] User profile: {user_profile}")
+        except Exception as e:
+            logger.exception(f"[identify-raw-ingredients] Failed to fetch user profile: {e}")
+    
     try:
         # Load image bytes (same logic as identify-food)
         image_url = request.image_url
@@ -884,8 +913,26 @@ async def identify_raw_ingredients(request: ImageRequest):
         b64 = base64.b64encode(image_bytes).decode("utf-8")
         data_uri = f"data:image/jpeg;base64,{b64}"
 
-        # Call AI with specialized prompt for raw ingredients - requesting JSON format
-        logger.info("[identify-raw-ingredients] Calling AI model with raw ingredients prompt")
+        # Build personalized context for AI
+        from datetime import datetime
+        current_time = datetime.utcnow()
+        time_of_day = "breakfast" if current_time.hour < 11 else "lunch" if current_time.hour < 15 else "dinner"
+        
+        context_parts = [f"Current time context: {time_of_day}"]
+        if user_profile:
+            if user_profile.get('age'):
+                context_parts.append(f"User age: {user_profile['age']}")
+            if user_profile.get('gender'):
+                context_parts.append(f"User gender: {user_profile['gender']}")
+            if user_profile.get('is_diabetic'):
+                context_parts.append("User is diabetic (prioritize low-sugar, low-carb recipes)")
+        
+        context_str = ". ".join(context_parts) + "."
+        
+        # Call AI with specialized prompt for raw ingredients - requesting JSON format with ranking
+        logger.info("[identify-raw-ingredients] Calling AI model with personalized raw ingredients prompt")
+        ai_prompt = f"{context_str}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients, ordered by relevance to the user's needs (considering time of day and health requirements). Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
+        
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
@@ -899,7 +946,7 @@ async def identify_raw_ingredients(request: ImageRequest):
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Analyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients. Respond ONLY with valid JSON in this exact format:\n{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\"},\n    ...\n  ]\n}\n\nIf no ingredients are visible, return: {\"ingredients\": [], \"dishes\": []}"
+                            "text": ai_prompt
                         },
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]

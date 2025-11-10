@@ -49,6 +49,7 @@ export default function UserProfile() {
       if (profile.weight !== undefined) body.weight = profile.weight ? Number(profile.weight) : null;
       if (profile.gender !== undefined) body.gender = profile.gender;
       if (profile.age !== undefined) body.age = profile.age ? Number(profile.age) : null;
+      if (profile.is_diabetic !== undefined) body.is_diabetic = profile.is_diabetic;
       const resp = await fetch('https://nutriguard-n98n.onrender.com/user/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -159,6 +160,32 @@ export default function UserProfile() {
 
           <Text>Weight (kg)</Text>
           <TextInput style={styles.input} keyboardType="numeric" value={profile.weight ? String(profile.weight) : ''} onChangeText={(t) => setProfile({ ...profile, weight: t })} />
+
+          <Text>Diabetic</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <TouchableOpacity
+              style={{
+                width: 50,
+                height: 30,
+                borderRadius: 15,
+                backgroundColor: profile.is_diabetic ? '#34C759' : '#ccc',
+                justifyContent: 'center',
+                paddingHorizontal: 2,
+              }}
+              onPress={() => setProfile({ ...profile, is_diabetic: !profile.is_diabetic })}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: '#fff',
+                  alignSelf: profile.is_diabetic ? 'flex-end' : 'flex-start',
+                }}
+              />
+            </TouchableOpacity>
+            <Text style={{ marginLeft: 10 }}>{profile.is_diabetic ? 'Yes' : 'No'}</Text>
+          </View>
 
           <View style={{ marginTop: 12, width: '100%' }}>
             <Button title="Save" onPress={handleSave} />
