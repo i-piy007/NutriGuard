@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -6,8 +6,73 @@ import { MaterialIcons } from '@expo/vector-icons';
 export default function RawIngredientsResult() {
   const params = useLocalSearchParams();
   const imageUrl = params.imageUrl as string;
-  const ingredients = params.ingredients ? JSON.parse(params.ingredients as string) : [];
-  const dishes = params.dishes ? JSON.parse(params.dishes as string) : [];
+
+  type Dish = { name: string; description?: string; image_url?: string | null };
+
+  const parseIngredientsFromText = (text: string): string[] => {
+    try {
+      const lines = String(text).split(/\r?\n/);
+      const out: string[] = [];
+      let inSection = false;
+      for (const line of lines) {
+        if (/^\s*ingredients\s*found/i.test(line)) { inSection = true; continue; }
+        if (/^\s*suggested\s*dishes/i.test(line)) { inSection = false; }
+        if (inSection) {
+          const m = line.match(/^\s*[-•]\s*(.+)$/);
+          if (m && m[1]) out.push(m[1].trim());
+        }
+      }
+      return out;
+    } catch { return []; }
+  };
+
+  const parseDishesFromText = (text: string): Dish[] => {
+    try {
+      const lines = String(text).split(/\r?\n/);
+      const out: Dish[] = [];
+      let inSection = false;
+      for (const line of lines) {
+        if (/^\s*suggested\s*dishes/i.test(line)) { inSection = true; continue; }
+        if (!inSection) continue;
+        const m = line.match(/^\s*\d+\.\s*(.+?)\s*:\s*(.+)$/);
+        if (m) {
+          out.push({ name: m[1].trim(), description: m[2].trim() });
+        }
+      }
+      // If nothing matched numbered list, fallback: split by line and take before colon as name
+      if (out.length === 0) {
+        for (const line of lines) {
+          const m2 = line.match(/^\s*(.+?)\s*:\s*(.+)$/);
+          if (m2) out.push({ name: m2[1].trim(), description: m2[2].trim() });
+        }
+      }
+      return out;
+    } catch { return []; }
+  };
+
+  const ingredients = useMemo(() => {
+    try {
+      if (!params.ingredients) return [];
+      const parsed = JSON.parse(String(params.ingredients));
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'string') return parseIngredientsFromText(parsed);
+      return [];
+    } catch {
+      return parseIngredientsFromText(String(params.ingredients));
+    }
+  }, [params.ingredients]);
+
+  const dishes: Dish[] = useMemo(() => {
+    try {
+      if (!params.dishes) return [];
+      const parsed = JSON.parse(String(params.dishes));
+      if (Array.isArray(parsed)) return parsed as Dish[];
+      if (typeof parsed === 'string') return parseDishesFromText(parsed);
+      return [];
+    } catch {
+      return parseDishesFromText(String(params.dishes));
+    }
+  }, [params.dishes]);
 
   return (
     <ScrollView style={styles.container}>
@@ -49,7 +114,7 @@ export default function RawIngredientsResult() {
           <MaterialIcons name="restaurant" size={24} color="#4cc9f0" />
           <Text style={styles.sectionTitle}>Suggested Dishes</Text>
         </View>
-        {dishes.length > 0 ? (
+        {Array.isArray(dishes) && dishes.length > 0 ? (
           dishes.map((dish: any, index: number) => (
             <View key={index} style={styles.dishCard}>
               {dish.image_url && (

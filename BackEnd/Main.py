@@ -199,6 +199,53 @@ class ImageRequest(BaseModel):
     image_url: str  # Now expects a URL to the image
 
 
+# --- Parsing helpers for robust outputs ---
+# Matches lines like "1. Pasta: tomato-based sauce" or "Pasta - with tomato"
+DISH_LINE_RE = re.compile(r'^\s*(?:\d+[.)]\s*)?(?P<name>[^:•\-]+?)(?:\s*[:\-]\s*(?P<desc>.+))?\s*$')
+
+def _normalize_dishes(dishes_raw: Any) -> List[Dict[str, Any]]:
+    """Normalize various dish formats (list of dicts/strings or a single string) into a list of dicts.
+    Each dict contains at least { name, description?, image_url? }.
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        if isinstance(dishes_raw, list):
+            for it in dishes_raw:
+                if isinstance(it, dict):
+                    out.append({
+                        "name": str(it.get("name", "")).strip(),
+                        "description": str(it.get("description", "")).strip() if it.get("description") is not None else None,
+                        "image_url": it.get("image_url"),
+                    })
+                elif isinstance(it, str):
+                    m = DISH_LINE_RE.match(it)
+                    if m:
+                        out.append({
+                            "name": (m.group("name") or "").strip(),
+                            "description": (m.group("desc") or "").strip() or None,
+                            "image_url": None,
+                        })
+        elif isinstance(dishes_raw, str):
+            for line in dishes_raw.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # skip obvious section headers
+                if line.lower().startswith(("ingredients", "suggested dishes")):
+                    continue
+                m = DISH_LINE_RE.match(line)
+                if m and m.group("name"):
+                    out.append({
+                        "name": (m.group("name") or "").strip(),
+                        "description": (m.group("desc") or "").strip() or None,
+                        "image_url": None,
+                    })
+    except Exception:
+        logger.exception("Failed to normalize dishes")
+    # filter empties
+    return [d for d in out if d.get("name")]
+
+
 # --- Auth helpers ---
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -826,23 +873,24 @@ async def identify_raw_ingredients(request: ImageRequest):
         import json
         try:
             # Try to extract JSON if wrapped in markdown code blocks
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            parsed_data = json.loads(response_text)
-            ingredients = parsed_data.get("ingredients", [])
-            dishes = parsed_data.get("dishes", [])
+            raw_text = response_text
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+            parsed_data = json.loads(raw_text)
+            ingredients = parsed_data.get("ingredients", []) or []
+            dishes = _normalize_dishes(parsed_data.get("dishes"))
         except Exception as e:
             logger.exception(f"[identify-raw-ingredients] Failed to parse JSON: {e}")
-            # Fallback: try to extract info from text
+            # Fallback: try to extract info from the free-form text
             ingredients = []
-            dishes = []
-            lines = response_text.split('\n')
-            for line in lines:
-                if line.strip().startswith('-') or line.strip().startswith('•'):
-                    ingredients.append(line.strip()[1:].strip())
+            dishes = _normalize_dishes(response_text)
+            for line in response_text.split('\n'):
+                s = line.strip()
+                if s.startswith(('-','•')):
+                    ingredients.append(s[1:].strip())
         
         # Fetch images for dishes using Google Custom Search (if API key available)
         google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -850,7 +898,7 @@ async def identify_raw_ingredients(request: ImageRequest):
         
         for dish in dishes:
             dish_name = dish.get("name", "")
-            dish["image_url"] = None  # Default
+            dish.setdefault("image_url", None)  # Ensure key exists
             
             if google_api_key and google_cx and dish_name:
                 try:
