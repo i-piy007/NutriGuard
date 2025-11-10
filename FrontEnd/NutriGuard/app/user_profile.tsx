@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function UserProfile() {
   const [token, setToken] = useState<string | null>(null);
@@ -123,104 +124,459 @@ export default function UserProfile() {
 
   if (!token) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Not signed in</Text>
-        <Button title="Go to Login" onPress={() => router.push('/login')} />
+      <View style={styles.notSignedInContainer}>
+        <MaterialIcons name="account-circle" size={80} color="#ddd" />
+        <Text style={styles.notSignedInTitle}>Not Signed In</Text>
+        <Text style={styles.notSignedInSubtitle}>Please log in to view your profile</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/login')}>
+          <Text style={styles.primaryButtonText}>Go to Login</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>User Profile</Text>
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Header Section */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          <MaterialIcons name="account-circle" size={80} color="#90be6d" />
+        </View>
+        <Text style={styles.username}>{profile?.username || 'User'}</Text>
+      </View>
+
       {profile ? (
         <>
-          <Text>Username (read-only)</Text>
-          <TextInput style={styles.input} value={profile.username} editable={false} />
+          {/* Personal Information Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <MaterialIcons name="person" size={24} color="#90be6d" />
+              <Text style={styles.cardTitle}>Personal Information</Text>
+            </View>
 
-          <Text>Name</Text>
-          <TextInput style={styles.input} value={profile.name || ''} onChangeText={(t) => setProfile({ ...profile, name: t })} />
-
-          <Text>Gender</Text>
-          <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-            {['Male', 'Female', 'Other'].map((g) => (
-              <TouchableOpacity key={g} style={{ marginRight: 8 }} onPress={() => setProfile({ ...profile, gender: g })}>
-                <View style={{ padding: 8, borderWidth: 1, borderColor: profile.gender === g ? '#007AFF' : '#ccc', borderRadius: 6 }}>
-                  <Text style={{ color: profile.gender === g ? '#007AFF' : '#000' }}>{g}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text>Age</Text>
-          <TextInput style={styles.input} keyboardType="numeric" value={profile.age ? String(profile.age) : ''} onChangeText={(t) => setProfile({ ...profile, age: t })} />
-
-          <Text>Height (cm)</Text>
-          <TextInput style={styles.input} keyboardType="numeric" value={profile.height ? String(profile.height) : ''} onChangeText={(t) => setProfile({ ...profile, height: t })} />
-
-          <Text>Weight (kg)</Text>
-          <TextInput style={styles.input} keyboardType="numeric" value={profile.weight ? String(profile.weight) : ''} onChangeText={(t) => setProfile({ ...profile, weight: t })} />
-
-          <Text>Diabetic</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <TouchableOpacity
-              style={{
-                width: 50,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: profile.is_diabetic ? '#34C759' : '#ccc',
-                justifyContent: 'center',
-                paddingHorizontal: 2,
-              }}
-              onPress={() => setProfile({ ...profile, is_diabetic: !profile.is_diabetic })}
-            >
-              <View
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: '#fff',
-                  alignSelf: profile.is_diabetic ? 'flex-end' : 'flex-start',
-                }}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput 
+                style={styles.input} 
+                value={profile.name || ''} 
+                onChangeText={(t) => setProfile({ ...profile, name: t })}
+                placeholder="Enter your name"
+                placeholderTextColor="#999"
               />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Age</Text>
+              <TextInput 
+                style={styles.input} 
+                keyboardType="numeric" 
+                value={profile.age ? String(profile.age) : ''} 
+                onChangeText={(t) => setProfile({ ...profile, age: t })}
+                placeholder="Enter your age"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.genderContainer}>
+                {['Male', 'Female', 'Other'].map((g) => (
+                  <Pressable 
+                    key={g} 
+                    style={[styles.genderButton, profile.gender === g && styles.genderButtonActive]}
+                    onPress={() => setProfile({ ...profile, gender: g })}
+                  >
+                    <Text style={[styles.genderButtonText, profile.gender === g && styles.genderButtonTextActive]}>
+                      {g}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Physical Stats Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <MaterialIcons name="straighten" size={24} color="#4cc9f0" />
+              <Text style={styles.cardTitle}>Physical Stats</Text>
+            </View>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.label}>Height (cm)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  keyboardType="numeric" 
+                  value={profile.height ? String(profile.height) : ''} 
+                  onChangeText={(t) => setProfile({ ...profile, height: t })}
+                  placeholder="0"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              <View style={styles.statItem}>
+                <Text style={styles.label}>Weight (kg)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  keyboardType="numeric" 
+                  value={profile.weight ? String(profile.weight) : ''} 
+                  onChangeText={(t) => setProfile({ ...profile, weight: t })}
+                  placeholder="0"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Health Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <MaterialIcons name="health-and-safety" size={24} color="#f94144" />
+              <Text style={styles.cardTitle}>Health Information</Text>
+            </View>
+
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleLabel}>
+                <MaterialIcons name="bloodtype" size={20} color="#666" />
+                <Text style={styles.toggleText}>Diabetic</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.toggle, profile.is_diabetic && styles.toggleActive]}
+                onPress={() => setProfile({ ...profile, is_diabetic: !profile.is_diabetic })}
+              >
+                <View style={[styles.toggleThumb, profile.is_diabetic && styles.toggleThumbActive]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Save Button */}
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <MaterialIcons name="save" size={20} color="#fff" />
+            <Text style={styles.saveButtonText}>Save Changes</Text>
+          </TouchableOpacity>
+
+          {/* Actions Card */}
+          <View style={styles.actionsCard}>
+            <Text style={styles.actionsTitle}>Quick Actions</Text>
+
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                Alert.alert('Clear Today\'s Data', 'This will clear today\'s macros locally and on the server. Continue?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Clear', onPress: handleClearToday, style: 'destructive' }
+                ]);
+              }}
+            >
+              <MaterialIcons name="clear-all" size={22} color="#ff8c00" />
+              <Text style={styles.actionButtonText}>Clear Today's Macros</Text>
+              <MaterialIcons name="chevron-right" size={22} color="#ccc" />
             </TouchableOpacity>
-            <Text style={{ marginLeft: 10 }}>{profile.is_diabetic ? 'Yes' : 'No'}</Text>
-          </View>
 
-          <View style={{ marginTop: 12, width: '100%' }}>
-            <Button title="Save" onPress={handleSave} />
-          </View>
-          <View style={{ marginTop: 12, width: '100%' }}>
-            <Button title="Clear today's macros" onPress={async () => {
-              Alert.alert('Clear today', 'This will clear today\'s macros locally and on the server (if logged in). Continue?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Continue', onPress: handleClearToday }
-              ]);
-            }} color="#ff8c00" />
-          </View>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                Alert.alert('Dev Mode', 'Open Food Add screen with sample data?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Open', onPress: handleOpenDev }
+                ]);
+              }}
+            >
+              <MaterialIcons name="code" size={22} color="#4cc9f0" />
+              <Text style={styles.actionButtonText}>Open Dev FoodAdd</Text>
+              <MaterialIcons name="chevron-right" size={22} color="#ccc" />
+            </TouchableOpacity>
 
-          <View style={{ marginTop: 12, width: '100%' }}>
-            <Button title="Open Dev FoodAdd" onPress={async () => {
-              Alert.alert('Open Dev FoodAdd', 'This will open the Food Add screen with development sample data. Continue?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Continue', onPress: handleOpenDev }
-              ]);
-            }} color="#007AFF" />
-          </View>
-
-          <View style={{ marginTop: 12, width: '100%' }}>
-            <Button title="Logout" onPress={handleLogout} color="#d33" />
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.logoutButton]}
+              onPress={() => {
+                Alert.alert('Logout', 'Are you sure you want to logout?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Logout', onPress: handleLogout, style: 'destructive' }
+                ]);
+              }}
+            >
+              <MaterialIcons name="logout" size={22} color="#f94144" />
+              <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Logout</Text>
+              <MaterialIcons name="chevron-right" size={22} color="#ccc" />
+            </TouchableOpacity>
           </View>
         </>
       ) : (
-        <Text>Loading...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, alignItems: 'stretch' },
-  title: { fontSize: 20, textAlign: 'center', marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 8, marginBottom: 10, borderRadius: 6 },
+  // Not Signed In
+  notSignedInContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#f8f9fa',
+  },
+  notSignedInTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  notSignedInSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 24,
+  },
+  primaryButton: {
+    backgroundColor: '#90be6d',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Main Layout
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+
+  // Header
+  header: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  avatarContainer: {
+    marginBottom: 12,
+  },
+  username: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#333',
+  },
+
+  // Cards
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 10,
+  },
+
+  // Input Groups
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 15,
+    color: '#333',
+  },
+
+  // Gender Buttons
+  genderContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  genderButtonActive: {
+    borderColor: '#90be6d',
+    backgroundColor: '#f1f8f4',
+  },
+  genderButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#666',
+  },
+  genderButtonTextActive: {
+    color: '#90be6d',
+    fontWeight: '600',
+  },
+
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statItem: {
+    flex: 1,
+  },
+
+  // Toggle
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  toggleLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toggleText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
+  },
+  toggle: {
+    width: 56,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e0e0e0',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#90be6d',
+  },
+  toggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  toggleThumbActive: {
+    alignSelf: 'flex-end',
+  },
+
+  // Save Button
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#90be6d',
+    marginHorizontal: 16,
+    marginTop: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+
+  // Actions Card
+  actionsCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 24,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  actionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    gap: 12,
+  },
+  actionButtonText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+  },
+  logoutButton: {
+    borderBottomWidth: 0,
+  },
+  logoutButtonText: {
+    color: '#f94144',
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+  },
 });

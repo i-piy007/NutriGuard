@@ -7,7 +7,7 @@ export default function RawIngredientsResult() {
   const params = useLocalSearchParams();
   const imageUrl = params.imageUrl as string;
 
-  type Dish = { name: string; description?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
+  type Dish = { name: string; description?: string; justification?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
 
   // Save to history on mount (once)
   React.useEffect(() => {
@@ -156,7 +156,15 @@ export default function RawIngredientsResult() {
               )}
               <View style={styles.dishContent}>
                 <Text style={styles.dishName}>{dish.name}</Text>
-                <Text style={styles.dishDescription}>{dish.description}</Text>
+                {dish.description && (
+                  <Text style={styles.dishDescription}>{dish.description}</Text>
+                )}
+                {dish.justification && (
+                  <View style={styles.justificationContainer}>
+                    <MaterialIcons name="info-outline" size={16} color="#4cc9f0" />
+                    <Text style={styles.justificationText}>{dish.justification}</Text>
+                  </View>
+                )}
               </View>
             </Pressable>
           ))
@@ -282,6 +290,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+    marginBottom: 8,
+  },
+  justificationContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#e8f4fd',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  justificationText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0077b6',
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
   actions: {
     flexDirection: 'row',

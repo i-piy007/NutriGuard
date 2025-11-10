@@ -54,7 +54,8 @@ DB_PATH = Path("data.db")
 def create_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    # users: id, email(unique), password_hash
+    # users: id, email(unique), username(unique), password_hash, name, height, weight, gender, age, is_diabetic
+    # All user profile data is persisted in SQLite and survives server restarts
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -338,7 +339,7 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     return {"id": row[0], "email": row[1], "username": row[2], "password_hash": row[3], "name": row[4]}
 
 
-def create_user(email: str, password: str, name: Optional[str] = None, username: Optional[str] = None, height: Optional[float] = None, weight: Optional[float] = None, gender: Optional[str] = None, age: Optional[int] = None) -> Dict[str, Any]:
+def create_user(email: str, password: str, name: Optional[str] = None, username: Optional[str] = None, height: Optional[float] = None, weight: Optional[float] = None, gender: Optional[str] = None, age: Optional[int] = None, is_diabetic: Optional[bool] = None) -> Dict[str, Any]:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     pwd = hash_password(password)
@@ -348,11 +349,13 @@ def create_user(email: str, password: str, name: Optional[str] = None, username:
             username = email.split('@')[0] if email and '@' in email else email
         except Exception:
             username = email
-    cur.execute("INSERT INTO users (email, username, password_hash, name, height, weight, gender, age) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (email, username, pwd, name, height, weight, gender, age))
+    # Convert is_diabetic boolean to integer (0 or 1) for SQLite
+    diabetic_val = None if is_diabetic is None else (1 if is_diabetic else 0)
+    cur.execute("INSERT INTO users (email, username, password_hash, name, height, weight, gender, age, is_diabetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (email, username, pwd, name, height, weight, gender, age, diabetic_val))
     conn.commit()
     user_id = cur.lastrowid
     conn.close()
-    return {"id": user_id, "email": email, "username": username, "name": name, "height": height, "weight": weight, "gender": gender, "age": age}
+    return {"id": user_id, "email": email, "username": username, "name": name, "height": height, "weight": weight, "gender": gender, "age": age, "is_diabetic": is_diabetic}
 
 
 def get_or_create_metric_for_day(user_id: int, day: str) -> int:
@@ -400,6 +403,7 @@ class RegisterRequest(BaseModel):
     height: Optional[float] = None
     weight: Optional[float] = None
     gender: Optional[str] = None
+    is_diabetic: Optional[bool] = None
 
 
 @app.post("/register")
@@ -416,7 +420,7 @@ async def register(req: RegisterRequest):
 
         # create a synthetic email to preserve existing schema, store provided profile fields
         synthetic_email = f"{req.username}@local"
-        user = create_user(synthetic_email, req.password, req.name, username=req.username, height=req.height, weight=req.weight, gender=req.gender, age=req.age)
+        user = create_user(synthetic_email, req.password, req.name, username=req.username, height=req.height, weight=req.weight, gender=req.gender, age=req.age, is_diabetic=req.is_diabetic)
         token = create_token(user["id"], user.get("email", synthetic_email), req.username)
         logger.info(f"[auth] Registered user id={user['id']} username={req.username}")
         logger.debug(f"[auth] Issued token for user id={user['id']}")
@@ -929,9 +933,9 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         
         context_str = ". ".join(context_parts) + "."
         
-        # Call AI with specialized prompt for raw ingredients - requesting JSON format with ranking
+        # Call AI with specialized prompt for raw ingredients - requesting JSON format with ranking and justification
         logger.info("[identify-raw-ingredients] Calling AI model with personalized raw ingredients prompt")
-        ai_prompt = f"{context_str}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients, ordered by relevance to the user's needs (considering time of day and health requirements). Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
+        ai_prompt = f"{context_str}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients, ordered by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
         
         completion = client.chat.completions.create(
             extra_headers={

@@ -13,6 +13,23 @@ export default function LoginScreen() {
     await AsyncStorage.setItem('token', token);
   };
 
+  const checkProfileCompleteness = async (token: string): Promise<boolean> => {
+    try {
+      const resp = await fetch('https://nutriguard-n98n.onrender.com/user/profile', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!resp.ok) return false;
+      const profile = await resp.json();
+      // Check if all required fields are present
+      const hasRequiredFields = profile.name && profile.age && profile.height && profile.weight && profile.gender;
+      console.log('[login] profile completeness check:', { hasRequiredFields, profile });
+      return hasRequiredFields;
+    } catch (e) {
+      console.error('[login] error checking profile completeness', e);
+      return false;
+    }
+  };
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
@@ -99,7 +116,14 @@ export default function LoginScreen() {
       } catch (e) {
         console.warn('[login] failed to decode token after register', e);
       }
-      router.replace('/dashboard');
+      
+      // Check if profile is complete
+      const isComplete = await checkProfileCompleteness(j.token);
+      if (isComplete) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/onboarding');
+      }
     } catch (e) {
       console.error('[login] register exception', e);
       Alert.alert('Error', String(e));
@@ -151,7 +175,14 @@ export default function LoginScreen() {
       } catch (e) {
         console.warn('[login] failed to decode token after login', e);
       }
-      router.replace('/dashboard');
+      
+      // Check if profile is complete
+      const isComplete = await checkProfileCompleteness(j.token);
+      if (isComplete) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/onboarding');
+      }
     } catch (e) {
       console.error('[login] login exception', e);
       Alert.alert('Error', String(e));
