@@ -23,11 +23,11 @@ export default function RootLayout() {
           ),
           headerRight: () => (
             <TouchableOpacity
-              onPress={() => router.push("/camera")}
+              onPress={() => router.push('/history')}
               style={{ paddingHorizontal: 12 }}
-              accessibilityLabel="Open camera"
+              accessibilityLabel="Open history"
             >
-              <MaterialIcons name="photo-camera" size={24} color="#000" />
+              <MaterialIcons name="history" size={24} color="#000" />
             </TouchableOpacity>
           ),
         }}

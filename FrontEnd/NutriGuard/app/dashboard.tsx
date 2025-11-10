@@ -5,6 +5,7 @@ import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 // adding a declaration file if you want stricter typing.
 // @ts-ignore
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from 'expo-router';
@@ -238,10 +239,31 @@ const Dashboard = () => {
                 </View>
             </View>
 
-            {/* Bottom: BMI card (kept) */}
-            <View style={styles.bottomCard}>
-                    <Text style={styles.bottomTitle}>BMI</Text>
-                    <Text style={styles.bottomValue}>{bmi ? bmi.toString() : '—'}</Text>
+            {/* Bottom: action buttons (BMI, Camera, New Feature) */}
+            <View style={styles.actionsRow}>
+                <TouchableOpacity
+                    style={[styles.actionButton, styles.actionButtonPrimary]}
+                    accessibilityLabel="BMI display"
+                >
+                    <Text style={styles.actionTitle}>BMI</Text>
+                    <Text style={styles.actionValue}>{bmi ? bmi.toString() : '—'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.actionButton, styles.actionButtonSecondary]}
+                    onPress={() => router.push('/camera')}
+                    accessibilityLabel="Open camera"
+                >
+                    <MaterialIcons name="photo-camera" size={25} color="#000" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.actionButton, styles.actionButtonSecondary]}
+                    onPress={() => router.push('/New Feature')}
+                    accessibilityLabel="Open new feature"
+                >
+                    <Text style={styles.actionTitle}>Raw Ingredients</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -375,6 +397,46 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#666",
         textAlign: "center",
+    },
+
+    // === Actions row (three buttons) ===
+    actionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 8,
+        marginBottom: 30,
+        gap: 10,
+    },
+    actionButton: {
+        flex: 1,
+        paddingVertical: 0,
+        height: 84,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: 9,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    actionButtonPrimary: {
+        backgroundColor: '#90be6d',
+    },
+    actionButtonSecondary: {
+        backgroundColor: '#f1f1f1',
+    },
+    actionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#000',
+    },
+    actionValue: {
+        fontSize: 14,
+        color: '#000',
+        marginTop: 6,
     },
 
     // === Bottom Card ===
