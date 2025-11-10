@@ -783,7 +783,7 @@ async def identify_raw_ingredients(request: ImageRequest):
         b64 = base64.b64encode(image_bytes).decode("utf-8")
         data_uri = f"data:image/jpeg;base64,{b64}"
 
-        # Call AI with specialized prompt for raw ingredients
+        # Call AI with specialized prompt for raw ingredients - requesting JSON format
         logger.info("[identify-raw-ingredients] Calling AI model with raw ingredients prompt")
         completion = client.chat.completions.create(
             extra_headers={
@@ -798,7 +798,7 @@ async def identify_raw_ingredients(request: ImageRequest):
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Analyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients. Format your response as:\n\nIngredients found:\n- [list ingredients]\n\nSuggested dishes:\n1. [Dish name]: [Brief description]\n2. [Dish name]: [Brief description]\n...\n\nIf no ingredients are visible, respond with 'No ingredients detected in the image.'"
+                            "text": "Analyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients. Respond ONLY with valid JSON in this exact format:\n{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\"},\n    ...\n  ]\n}\n\nIf no ingredients are visible, return: {\"ingredients\": [], \"dishes\": []}"
                         },
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
@@ -818,12 +818,65 @@ async def identify_raw_ingredients(request: ImageRequest):
 
         response_text = completion.choices[0].message.content
         if not response_text:
-            response_text = "Unable to identify ingredients in the image."
+            response_text = '{"ingredients": [], "dishes": []}'
 
-        logger.info(f"[identify-raw-ingredients] Response: {summarize(response_text, max_words=50)}")
+        logger.info(f"[identify-raw-ingredients] Raw response: {summarize(response_text, max_words=50)}")
+
+        # Parse JSON response
+        import json
+        try:
+            # Try to extract JSON if wrapped in markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            parsed_data = json.loads(response_text)
+            ingredients = parsed_data.get("ingredients", [])
+            dishes = parsed_data.get("dishes", [])
+        except Exception as e:
+            logger.exception(f"[identify-raw-ingredients] Failed to parse JSON: {e}")
+            # Fallback: try to extract info from text
+            ingredients = []
+            dishes = []
+            lines = response_text.split('\n')
+            for line in lines:
+                if line.strip().startswith('-') or line.strip().startswith('•'):
+                    ingredients.append(line.strip()[1:].strip())
+        
+        # Fetch images for dishes using Google Custom Search (if API key available)
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        google_cx = os.getenv("GOOGLE_CX")
+        
+        for dish in dishes:
+            dish_name = dish.get("name", "")
+            dish["image_url"] = None  # Default
+            
+            if google_api_key and google_cx and dish_name:
+                try:
+                    search_url = "https://www.googleapis.com/customsearch/v1"
+                    params = {
+                        "key": google_api_key,
+                        "cx": google_cx,
+                        "q": f"{dish_name} food dish",
+                        "searchType": "image",
+                        "num": 1,
+                        "imgSize": "medium"
+                    }
+                    resp = requests.get(search_url, params=params, timeout=5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("items") and len(data["items"]) > 0:
+                            dish["image_url"] = data["items"][0].get("link")
+                            logger.info(f"[identify-raw-ingredients] Found image for {dish_name}")
+                except Exception as e:
+                    logger.warning(f"[identify-raw-ingredients] Failed to fetch image for {dish_name}: {e}")
+
+        logger.info(f"[identify-raw-ingredients] Returning {len(ingredients)} ingredients and {len(dishes)} dishes")
 
         return {
-            "dishes": response_text,
+            "ingredients": ingredients,
+            "dishes": dishes,
             "raw_response": response_text
         }
 

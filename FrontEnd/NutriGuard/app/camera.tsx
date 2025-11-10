@@ -83,13 +83,17 @@ export default function CameraScreen() {
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
       
-      // For raw ingredients mode, show the dishes suggestions
+      // For raw ingredients mode, navigate to results screen
       if (isRawIngredientsMode) {
-        Alert.alert(
-          "Suggested Dishes",
-          identifyData.dishes || "No suggestions available",
-          [{ text: "OK", onPress: () => router.back() }]
-        );
+        const displayImageUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
+        router.push({
+          pathname: "/raw_ingredients_result",
+          params: {
+            imageUrl: displayImageUrl,
+            ingredients: JSON.stringify(identifyData.ingredients || []),
+            dishes: JSON.stringify(identifyData.dishes || []),
+          },
+        });
         return;
       }
       
