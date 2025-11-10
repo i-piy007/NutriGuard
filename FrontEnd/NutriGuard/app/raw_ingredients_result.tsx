@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Pressable } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -7,7 +7,7 @@ export default function RawIngredientsResult() {
   const params = useLocalSearchParams();
   const imageUrl = params.imageUrl as string;
 
-  type Dish = { name: string; description?: string; image_url?: string | null };
+  type Dish = { name: string; description?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
 
   const parseIngredientsFromText = (text: string): string[] => {
     try {
@@ -116,7 +116,13 @@ export default function RawIngredientsResult() {
         </View>
         {Array.isArray(dishes) && dishes.length > 0 ? (
           dishes.map((dish: any, index: number) => (
-            <View key={index} style={styles.dishCard}>
+            <Pressable key={index} style={styles.dishCard} onPress={() => {
+              try {
+                router.push({ pathname: '/recipe_detail', params: { dish: JSON.stringify(dish) } });
+              } catch {
+                router.push('/recipe_detail');
+              }
+            }}>
               {dish.image_url && (
                 <Image 
                   source={{ uri: dish.image_url }} 
@@ -128,7 +134,7 @@ export default function RawIngredientsResult() {
                 <Text style={styles.dishName}>{dish.name}</Text>
                 <Text style={styles.dishDescription}>{dish.description}</Text>
               </View>
-            </View>
+            </Pressable>
           ))
         ) : (
           <Text style={styles.emptyText}>No dish suggestions available</Text>

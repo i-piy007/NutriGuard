@@ -961,6 +961,28 @@ async def identify_raw_ingredients(request: ImageRequest):
                                     dish_steps.append(str(txt))
                         if dish_steps:
                             dish["steps"] = dish_steps
+                        # Extract simple nutrition (if present) and extended ingredients
+                        try:
+                            # Nutrition may be included only if API returns it; we asked includeNutrition=false so usually absent.
+                            # If later toggled, handle summary extraction.
+                            nutrition_obj = info.get("nutrition") or {}
+                            if nutrition_obj.get("nutrients"):
+                                macros = {}
+                                for n in nutrition_obj.get("nutrients", []):
+                                    name = n.get("name")
+                                    if name in {"Calories", "Protein", "Fat", "Carbohydrates", "Sugar", "Fiber"}:
+                                        macros[name.lower()] = n.get("amount")
+                                if macros:
+                                    dish["nutrition"] = macros
+                            ext_ing = []
+                            for ing in info.get("extendedIngredients", []) or []:
+                                orig = ing.get("original") or ing.get("name")
+                                if orig:
+                                    ext_ing.append(str(orig))
+                            if ext_ing:
+                                dish["ingredients"] = ext_ing
+                        except Exception:
+                            logger.exception(f"[spoonacular] failed extracting nutrition/ingredients for dish '{dish_name}'")
 
             # Fallback to Google image search if still no image
             if not dish.get("image_url") and google_api_key and google_cx and dish_name:
