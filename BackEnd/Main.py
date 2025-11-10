@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 CALORIENINJAS_API_KEY = os.getenv("CALORIENINJAS_API_KEY")
+SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY") or "003cce6f9e8a4832937fa8bd9b2356f9"  # temporary fallback per user instruction
 logger.info(f"OPENROUTER_API_KEY set: {bool(OPENROUTER_API_KEY)}")
 logger.info(f"CALORIENINJAS_API_KEY set: {bool(CALORIENINJAS_API_KEY)}")
+logger.info(f"SPOONACULAR_API_KEY set: {bool(SPOONACULAR_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
@@ -244,6 +246,46 @@ def _normalize_dishes(dishes_raw: Any) -> List[Dict[str, Any]]:
         logger.exception("Failed to normalize dishes")
     # filter empties
     return [d for d in out if d.get("name")]
+
+
+# --- Spoonacular helpers ---
+def spoonacular_search_recipe(dish_name: str, include_ingredients: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """Search Spoonacular for a dish by name. Returns top result dict or None."""
+    try:
+        params = {
+            "query": dish_name,
+            "number": 1,
+            "apiKey": SPOONACULAR_API_KEY,
+        }
+        # Optionally bias by available ingredients
+        if include_ingredients:
+            try:
+                params["includeIngredients"] = ",".join(include_ingredients[:5])  # limit to first 5
+            except Exception:
+                pass
+        url = "https://api.spoonacular.com/recipes/complexSearch"
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json() or {}
+        results = data.get("results") or []
+        if results:
+            return results[0]
+    except Exception:
+        logger.exception(f"[spoonacular] search failed for '{dish_name}'")
+    return None
+
+
+def spoonacular_get_recipe_info(recipe_id: int) -> Optional[Dict[str, Any]]:
+    """Get detailed recipe info including image and instructions."""
+    try:
+        params = {"includeNutrition": "false", "apiKey": SPOONACULAR_API_KEY}
+        url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        logger.exception(f"[spoonacular] information failed for id={recipe_id}")
+        return None
 
 
 # --- Auth helpers ---
@@ -892,15 +934,36 @@ async def identify_raw_ingredients(request: ImageRequest):
                 if s.startswith(('-','•')):
                     ingredients.append(s[1:].strip())
         
-        # Fetch images for dishes using Google Custom Search (if API key available)
+        # Enrich each dish with Spoonacular information (image + steps). Fall back to Google image if needed.
         google_api_key = os.getenv("GOOGLE_API_KEY")
         google_cx = os.getenv("GOOGLE_CX")
-        
+
         for dish in dishes:
-            dish_name = dish.get("name", "")
-            dish.setdefault("image_url", None)  # Ensure key exists
-            
-            if google_api_key and google_cx and dish_name:
+            dish_name = dish.get("name", "").strip()
+            dish.setdefault("image_url", None)
+            dish_steps: List[str] = []
+
+            # Try Spoonacular first
+            if dish_name and SPOONACULAR_API_KEY:
+                result = spoonacular_search_recipe(dish_name, include_ingredients=ingredients if isinstance(ingredients, list) else None)
+                if result and result.get("id"):
+                    info = spoonacular_get_recipe_info(int(result["id"]))
+                    if info:
+                        # Prefer Spoonacular image
+                        dish["image_url"] = info.get("image") or dish.get("image_url")
+                        # Extract steps from analyzedInstructions
+                        instr_blocks = info.get("analyzedInstructions") or []
+                        if instr_blocks and isinstance(instr_blocks, list):
+                            steps_block = instr_blocks[0] or {}
+                            for st in steps_block.get("steps", []) or []:
+                                txt = st.get("step")
+                                if txt:
+                                    dish_steps.append(str(txt))
+                        if dish_steps:
+                            dish["steps"] = dish_steps
+
+            # Fallback to Google image search if still no image
+            if not dish.get("image_url") and google_api_key and google_cx and dish_name:
                 try:
                     search_url = "https://www.googleapis.com/customsearch/v1"
                     params = {
@@ -914,11 +977,11 @@ async def identify_raw_ingredients(request: ImageRequest):
                     resp = requests.get(search_url, params=params, timeout=5)
                     if resp.status_code == 200:
                         data = resp.json()
-                        if data.get("items") and len(data["items"]) > 0:
+                        if data.get("items"):
                             dish["image_url"] = data["items"][0].get("link")
-                            logger.info(f"[identify-raw-ingredients] Found image for {dish_name}")
+                            logger.info(f"[identify-raw-ingredients] Found image for {dish_name} via Google")
                 except Exception as e:
-                    logger.warning(f"[identify-raw-ingredients] Failed to fetch image for {dish_name}: {e}")
+                    logger.warning(f"[identify-raw-ingredients] Google image lookup failed for {dish_name}: {e}")
 
         logger.info(f"[identify-raw-ingredients] Returning {len(ingredients)} ingredients and {len(dishes)} dishes")
 
