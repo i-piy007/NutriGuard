@@ -9,6 +9,30 @@ export default function RawIngredientsResult() {
 
   type Dish = { name: string; description?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
 
+  // Save to history on mount (once)
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+        const token = await AsyncStorage.getItem('token');
+        if (token && params.ingredients && params.dishes) {
+          await fetch('https://nutriguard-n98n.onrender.com/history/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              image_url: imageUrl,
+              scan_type: 'raw_ingredients',
+              result_json: JSON.stringify({ ingredients: params.ingredients, dishes: params.dishes })
+            })
+          });
+          console.log('Saved raw ingredients scan to history');
+        }
+      } catch (err) {
+        console.warn('Failed to save raw ingredients to history:', err);
+      }
+    })();
+  }, []);
+
   const parseIngredientsFromText = (text: string): string[] => {
     try {
       const lines = String(text).split(/\r?\n/);

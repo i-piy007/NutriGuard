@@ -95,6 +95,18 @@ def create_db():
         FOREIGN KEY(metric_id) REFERENCES metrics(id)
     )
     """)
+    # history: id, user_id, timestamp, image_url, scan_type (food|raw_ingredients), result_json
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        image_url TEXT,
+        scan_type TEXT NOT NULL,
+        result_json TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+    """)
     conn.commit()
     conn.close()
 
@@ -1081,3 +1093,69 @@ async def identify_image(request: ImageURLRequest):
     except Exception as e:
         logger.exception(f"[identify-image] Error processing request: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- History endpoints ---
+class SaveHistoryRequest(BaseModel):
+    image_url: Optional[str] = None
+    scan_type: str  # "food" or "raw_ingredients"
+    result_json: str  # JSON string of the scan result
+
+
+@app.post("/history/save")
+async def save_history(req: SaveHistoryRequest, authorization: Optional[str] = Header(None)):
+    """Save a scan session to history for the authenticated user."""
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    user_id = int(payload.get("user_id"))
+    timestamp = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO history (user_id, timestamp, image_url, scan_type, result_json) VALUES (?, ?, ?, ?, ?)",
+            (user_id, timestamp, req.image_url, req.scan_type, req.result_json)
+        )
+        conn.commit()
+        history_id = cur.lastrowid
+        logger.info(f"[history] Saved scan for user {user_id}, id={history_id}, type={req.scan_type}")
+        return {"status": "ok", "history_id": history_id}
+    except Exception as e:
+        logger.exception(f"[history] Failed to save: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save history")
+    finally:
+        conn.close()
+
+
+@app.get("/history")
+async def get_history(authorization: Optional[str] = Header(None)):
+    """Fetch all scan history for the authenticated user, newest first."""
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    user_id = int(payload.get("user_id"))
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT id, timestamp, image_url, scan_type, result_json FROM history WHERE user_id = ? ORDER BY timestamp DESC",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        history_items = []
+        for row in rows:
+            history_items.append({
+                "id": row[0],
+                "timestamp": row[1],
+                "image_url": row[2],
+                "scan_type": row[3],
+                "result_json": row[4]
+            })
+        logger.info(f"[history] Fetched {len(history_items)} items for user {user_id}")
+        return {"history": history_items}
+    except Exception as e:
+        logger.exception(f"[history] Failed to fetch: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch history")
+    finally:
+        conn.close()

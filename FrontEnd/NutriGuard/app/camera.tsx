@@ -83,7 +83,7 @@ export default function CameraScreen() {
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
       
-      // For raw ingredients mode, navigate to results screen
+      // For raw ingredients mode, navigate to results screen and save to history
       if (isRawIngredientsMode) {
         const displayImageUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
         router.push({

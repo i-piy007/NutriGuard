@@ -84,6 +84,22 @@ export default function FoodAddScreen() {
           });
           const j = await resp.json();
           console.log('Saved metrics server response:', j);
+
+          // Save to history
+          try {
+            await fetch('https://nutriguard-n98n.onrender.com/history/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                image_url: imageUrl,
+                scan_type: 'food',
+                result_json: JSON.stringify({ itemName, nutrition: nutritionData })
+              })
+            });
+            console.log('Saved food scan to history');
+          } catch (histErr) {
+            console.warn('Failed to save to history:', histErr);
+          }
         }
       } catch (e) {
         console.warn('Failed to save metrics to server:', e);
