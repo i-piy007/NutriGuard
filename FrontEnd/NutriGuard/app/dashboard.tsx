@@ -259,8 +259,8 @@ const Dashboard = () => {
 
                 <TouchableOpacity
                     style={[styles.actionButton, styles.actionButtonSecondary]}
-                    onPress={() => router.push('/New Feature')}
-                    accessibilityLabel="Open new feature"
+                    onPress={() => router.push('/camera?mode=raw_ingredients')}
+                    accessibilityLabel="Open raw ingredients scanner"
                 >
                     <Text style={styles.actionTitle}>Raw Ingredients</Text>
                 </TouchableOpacity>

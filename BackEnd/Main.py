@@ -750,6 +750,90 @@ class ImageURLRequest(BaseModel):
     image_url: str
 
 
+@app.post("/identify-raw-ingredients")
+async def identify_raw_ingredients(request: ImageRequest):
+    """Endpoint for analyzing raw ingredients and suggesting dishes that can be made."""
+    logger.info(f"[identify-raw-ingredients] Received request for URL: {request.image_url}")
+    try:
+        # Load image bytes (same logic as identify-food)
+        image_url = request.image_url
+        filename = Path(image_url).name
+        local_path = public_dir / filename
+        image_bytes = None
+
+        if local_path.exists():
+            logger.info(f"[identify-raw-ingredients] Found local image at {local_path}")
+            image_bytes = local_path.read_bytes()
+        else:
+            logger.info(f"[identify-raw-ingredients] Fetching remote URL: {image_url}")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client_http:
+                    resp = await client_http.get(image_url)
+                    resp.raise_for_status()
+                    image_bytes = resp.content
+                    logger.info(f"[identify-raw-ingredients] Fetched remote image, size={len(image_bytes)}")
+            except Exception as e:
+                logger.exception(f"[identify-raw-ingredients] Failed to fetch image: {e}")
+                raise HTTPException(status_code=400, detail=f"Could not retrieve image: {e}")
+
+        if not image_bytes:
+            raise HTTPException(status_code=400, detail="No image bytes available")
+
+        # Convert to base64 data URI
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        data_uri = f"data:image/jpeg;base64,{b64}"
+
+        # Call AI with specialized prompt for raw ingredients
+        logger.info("[identify-raw-ingredients] Calling AI model with raw ingredients prompt")
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "http://localhost:8081",
+                "X-Title": "NutriGuard",
+            },
+            extra_body={},
+            model="meta-llama/llama-4-maverick:free",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": "Analyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious dishes that can be made using these ingredients. Format your response as:\n\nIngredients found:\n- [list ingredients]\n\nSuggested dishes:\n1. [Dish name]: [Brief description]\n2. [Dish name]: [Brief description]\n...\n\nIf no ingredients are visible, respond with 'No ingredients detected in the image.'"
+                        },
+                        {"type": "image_url", "image_url": {"url": data_uri}}
+                    ]
+                }
+            ],
+        )
+
+        logger.info(f"[identify-raw-ingredients] AI completion preview: {summarize(completion)}")
+
+        if getattr(completion, "error", None):
+            logger.error(f"[identify-raw-ingredients] AI error: {completion.error}")
+            raise HTTPException(status_code=500, detail=f"AI error: {completion.error}")
+
+        if not completion.choices or not completion.choices[0].message:
+            logger.error("[identify-raw-ingredients] AI response missing choices/message")
+            raise HTTPException(status_code=500, detail="Invalid response from AI model")
+
+        response_text = completion.choices[0].message.content
+        if not response_text:
+            response_text = "Unable to identify ingredients in the image."
+
+        logger.info(f"[identify-raw-ingredients] Response: {summarize(response_text, max_words=50)}")
+
+        return {
+            "dishes": response_text,
+            "raw_response": response_text
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[identify-raw-ingredients] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # New clean identify endpoint: accepts image_url, sends to model, returns raw model JSON
 @app.post("/identify-image")
 async def identify_image(request: ImageURLRequest):

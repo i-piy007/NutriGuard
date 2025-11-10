@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { Camera, CameraView } from "expo-camera";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 export default function CameraScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
+  const { mode } = useLocalSearchParams(); // Get mode parameter from URL
 
   // Request camera permission on mount
   useEffect(() => {
@@ -59,9 +60,14 @@ export default function CameraScreen() {
       console.log("Upload response data:", uploadData);
       const imageUrl = uploadData.image_url;
 
-      // Now, send the image URL to identify food
-      console.log("Identifying food with URL:", imageUrl);
-      const identifyResponse = await fetch("https://nutriguard-n98n.onrender.com/identify-food", {
+      // Determine which endpoint to use based on mode
+      const isRawIngredientsMode = mode === 'raw_ingredients';
+      const endpoint = isRawIngredientsMode 
+        ? "https://nutriguard-n98n.onrender.com/identify-raw-ingredients"
+        : "https://nutriguard-n98n.onrender.com/identify-food";
+      
+      console.log(`Identifying ${isRawIngredientsMode ? 'raw ingredients' : 'food'} with URL:`, imageUrl);
+      const identifyResponse = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -76,7 +82,18 @@ export default function CameraScreen() {
 
       const identifyData = await identifyResponse.json();
       console.log("Identify response data:", identifyData);
-      // Log a short preview of nutrition if present
+      
+      // For raw ingredients mode, show the dishes suggestions
+      if (isRawIngredientsMode) {
+        Alert.alert(
+          "Suggested Dishes",
+          identifyData.dishes || "No suggestions available",
+          [{ text: "OK", onPress: () => router.back() }]
+        );
+        return;
+      }
+      
+      // For normal food mode, continue with nutrition tracking
       try {
         const nutritionPreview = identifyData?.nutrition ? JSON.stringify(identifyData.nutrition).slice(0, 120) + '...' : 'null';
         console.log('Nutrition preview:', nutritionPreview);
