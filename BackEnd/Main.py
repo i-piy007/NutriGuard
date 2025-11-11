@@ -47,6 +47,11 @@ client = OpenAI(
 
 app = FastAPI()
 
+# Health check endpoint for Render
+@app.get("/")
+def read_root():
+    return {"message": "NutriGuard backend is live!", "status": "healthy"}
+
 
 # --- Simple SQLite user + metrics storage ---
 DB_PATH = Path("data.db")
