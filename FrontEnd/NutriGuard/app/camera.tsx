@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from "react-native";
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Camera, CameraView } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
@@ -33,6 +34,35 @@ export default function CameraScreen() {
     } catch (error) {
       console.error("Error taking picture:", error);
       Alert.alert("Error", "Failed to take picture");
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Permission to access the photo library is required.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+
+      // Modern versions return { canceled, assets } else { cancelled, uri }
+      const uri = (result as any).assets && (result as any).assets.length > 0
+        ? (result as any).assets[0].uri
+        : (result as any).uri;
+
+      if (!uri) return;
+
+      setCapturedImage(uri);
+      // Immediately process/upload the picked image
+      await confirmAndUpload();
+    } catch (err) {
+      console.error('Error picking image:', err);
+      Alert.alert('Error', 'Unable to pick the image.');
     }
   };
 
@@ -224,7 +254,7 @@ export default function CameraScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.controlButton}
-                onPress={() => {}}
+                onPress={pickImage}
               >
                 <MaterialIcons name="image" size={30} color="#fff" />
               </TouchableOpacity>
