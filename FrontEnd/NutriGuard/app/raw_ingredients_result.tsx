@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Pressable } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Pressable, useWindowDimensions, Switch } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -105,6 +105,20 @@ export default function RawIngredientsResult() {
     }
   }, [params.dishes]);
 
+  // Responsive filter panel state
+  const { width } = useWindowDimensions();
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterTimes, setFilterTimes] = useState({
+    breakfast: false,
+    lunch: false,
+    snacks: false,
+    dinner: false,
+  });
+  // Age filter: single-select string ('child' | 'adult' | 'old')
+  const [filterAge, setFilterAge] = useState<string | null>(null);
+  // Diabetes toggle similar to profile (boolean)
+  const [filterDiabetic, setFilterDiabetic] = useState(false);
+
   return (
     <ScrollView style={styles.container}>
       {/* Header with captured image */}
@@ -119,66 +133,240 @@ export default function RawIngredientsResult() {
         )}
       </View>
 
-      {/* Ingredients Section */}
-      <View style={styles.section}>
+      {/* Ingredients Section with right-side Filter Panel */}
+      <View style={[styles.section, styles.sectionWithFilters]}>
         <View style={styles.sectionHeader}>
           <MaterialIcons name="kitchen" size={24} color="#90be6d" />
           <Text style={styles.sectionTitle}>Ingredients Found</Text>
+          {/* Filters button for small screens (opens a selection panel) */}
+          {width < 700 && (
+            <TouchableOpacity style={styles.filterToggleButton} onPress={() => setShowFilters(s => !s)}>
+              <MaterialIcons name="filter-list" size={22} color="#333" />
+              <Text style={styles.filterToggleText}>Filters</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {ingredients.length > 0 ? (
-          <View style={styles.ingredientsList}>
-            {ingredients.map((ingredient: string, index: number) => (
-              <View key={index} style={styles.ingredientChip}>
-                <MaterialIcons name="check-circle" size={16} color="#90be6d" />
-                <Text style={styles.ingredientText}>{ingredient}</Text>
+
+        <View style={[styles.rowContainer, width >= 700 ? styles.row : styles.column]}>
+          <View style={styles.leftColumn}>
+            {ingredients.length > 0 ? (
+              <View style={styles.ingredientsList}>
+                {ingredients.map((ingredient: string, index: number) => (
+                  <View key={index} style={styles.ingredientChip}>
+                    <MaterialIcons name="check-circle" size={16} color="#90be6d" />
+                    <Text style={styles.ingredientText}>{ingredient}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
+            ) : (
+              <Text style={styles.emptyText}>No ingredients detected</Text>
+            )}
+
+            {/* Keep Suggested Dishes under the ingredients in the left column */}
+            <View style={{ marginTop: 12 }}>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons name="restaurant" size={20} color="#4cc9f0" />
+                <Text style={[styles.sectionTitle, { fontSize: 16, marginLeft: 8 }]}>Suggested Dishes</Text>
+              </View>
+              {Array.isArray(dishes) && dishes.length > 0 ? (
+                dishes.map((dish: any, index: number) => (
+                  <Pressable key={index} style={styles.dishCard} onPress={() => {
+                    try {
+                      router.push({ pathname: '/recipe_detail', params: { dish: JSON.stringify(dish) } });
+                    } catch {
+                      router.push('/recipe_detail');
+                    }
+                  }}>
+                    {dish.image_url && (
+                      <Image 
+                        source={{ uri: dish.image_url }} 
+                        style={styles.dishImage}
+                        resizeMode="cover"
+                      />
+                    )}
+                    <View style={styles.dishContent}>
+                      <Text style={styles.dishName}>{dish.name}</Text>
+                      {dish.description && (
+                        <Text style={styles.dishDescription}>{dish.description}</Text>
+                      )}
+                      {dish.justification && (
+                        <View style={styles.justificationContainer}>
+                          <MaterialIcons name="info-outline" size={16} color="#4cc9f0" />
+                          <Text style={styles.justificationText}>{dish.justification}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No dish suggestions available</Text>
+              )}
+            </View>
           </View>
-        ) : (
-          <Text style={styles.emptyText}>No ingredients detected</Text>
-        )}
+
+          {/* Filter Panel (side panel on wide screens) */}
+          {width >= 700 && (
+            <View style={styles.filterPanel}>
+              <View style={styles.filterHeader}>
+                <MaterialIcons name="tune" size={20} color="#333" />
+                <Text style={styles.filterTitle}>Filters</Text>
+              </View>
+
+              {/* Time selection (Breakfast / Lunch / Snacks / Dinner) */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={styles.filterSectionLabel}>Time</Text>
+                <View style={styles.timeOptions}>
+                  {[
+                    { key: 'breakfast', label: 'Breakfast' },
+                    { key: 'lunch', label: 'Lunch' },
+                    { key: 'snacks', label: 'Snacks' },
+                    { key: 'dinner', label: 'Dinner' },
+                  ].map(opt => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[
+                        styles.timeChip,
+                        filterTimes[opt.key as keyof typeof filterTimes] ? styles.timeChipActive : null,
+                      ]}
+                      onPress={() => setFilterTimes(t => ({ ...t, [opt.key]: !t[opt.key as keyof typeof t] }))}
+                    >
+                      <Text style={[styles.timeChipText, filterTimes[opt.key as keyof typeof filterTimes] ? styles.timeChipTextActive : null]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Age selection (Child / Adult / Old) - single select */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={styles.filterSectionLabel}>Age</Text>
+                <View style={styles.timeOptions}>
+                  {[
+                    { key: 'child', label: 'Child' },
+                    { key: 'adult', label: 'Adult' },
+                    { key: 'Senior', label: 'Senior' },
+                  ].map(opt => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[
+                        styles.timeChip,
+                        filterAge === opt.key ? styles.timeChipActive : null,
+                      ]}
+                      onPress={() => setFilterAge(prev => (prev === opt.key ? null : opt.key))}
+                    >
+                      <Text style={[styles.timeChipText, filterAge === opt.key ? styles.timeChipTextActive : null]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Diabetes toggle (like profile) */}
+              <View style={styles.filterOption}>
+                <Text style={styles.filterLabel}>Diabetic</Text>
+                <Switch value={filterDiabetic} onValueChange={setFilterDiabetic} />
+              </View>
+
+              <View style={styles.filterActions}>
+                <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={() => {
+                  setFilterTimes({ breakfast: false, lunch: false, snacks: false, dinner: false });
+                  setFilterAge(null); setFilterDiabetic(false);
+                }}>
+                  <Text style={styles.buttonText}>Clear</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={() => {
+                  // apply logic later
+                }}>
+                  <Text style={[styles.buttonText, styles.buttonTextWhite]}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Mobile overlay panel (bottom sheet style) */}
+          {width < 700 && showFilters && (
+            <View style={styles.modalBackdrop}>
+              {/* Left drawer panel first, backdrop to the right */}
+              <View style={styles.modalPanel}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.filterTitle}>Filters</Text>
+                  <TouchableOpacity onPress={() => setShowFilters(false)}>
+                    <MaterialIcons name="close" size={22} color="#333" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Time selection (Breakfast / Lunch / Snacks / Dinner) */}
+                <View style={{ marginVertical: 6 }}>
+                  <Text style={styles.filterSectionLabel}>Time</Text>
+                  <View style={styles.timeOptions}>
+                    {[
+                      { key: 'breakfast', label: 'Breakfast' },
+                      { key: 'lunch', label: 'Lunch' },
+                      { key: 'snacks', label: 'Snacks' },
+                      { key: 'dinner', label: 'Dinner' },
+                    ].map(opt => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.timeChip,
+                          filterTimes[opt.key as keyof typeof filterTimes] ? styles.timeChipActive : null,
+                        ]}
+                        onPress={() => setFilterTimes(t => ({ ...t, [opt.key]: !t[opt.key as keyof typeof t] }))}
+                      >
+                        <Text style={[styles.timeChipText, filterTimes[opt.key as keyof typeof filterTimes] ? styles.timeChipTextActive : null]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Age selection (Child / Adult / Old) - single select */}
+                <View style={{ marginVertical: 6 }}>
+                  <Text style={styles.filterSectionLabel}>Age</Text>
+                  <View style={styles.timeOptions}>
+                    {[
+                      { key: 'child', label: 'Child' },
+                      { key: 'adult', label: 'Adult' },
+                      { key: 'old', label: 'Old' },
+                    ].map(opt => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.timeChip,
+                          filterAge === opt.key ? styles.timeChipActive : null,
+                        ]}
+                        onPress={() => setFilterAge(prev => (prev === opt.key ? null : opt.key))}
+                      >
+                        <Text style={[styles.timeChipText, filterAge === opt.key ? styles.timeChipTextActive : null]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Diabetes toggle (like profile) */}
+                <View style={styles.filterOption}>
+                  <Text style={styles.filterLabel}>Diabetic</Text>
+                  <Switch value={filterDiabetic} onValueChange={setFilterDiabetic} />
+                </View>
+
+                <View style={styles.filterActions}>
+                  <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={() => {
+                    setFilterTimes({ breakfast: false, lunch: false, snacks: false, dinner: false });
+                    setFilterAge(null); setFilterDiabetic(false);
+                  }}>
+                    <Text style={styles.buttonText}>Clear</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={() => setShowFilters(false)}>
+                    <Text style={[styles.buttonText, styles.buttonTextWhite]}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.backdropTouchable} onPress={() => setShowFilters(false)} />
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Suggested Dishes Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="restaurant" size={24} color="#4cc9f0" />
-          <Text style={styles.sectionTitle}>Suggested Dishes</Text>
-        </View>
-        {Array.isArray(dishes) && dishes.length > 0 ? (
-          dishes.map((dish: any, index: number) => (
-            <Pressable key={index} style={styles.dishCard} onPress={() => {
-              try {
-                router.push({ pathname: '/recipe_detail', params: { dish: JSON.stringify(dish) } });
-              } catch {
-                router.push('/recipe_detail');
-              }
-            }}>
-              {dish.image_url && (
-                <Image 
-                  source={{ uri: dish.image_url }} 
-                  style={styles.dishImage}
-                  resizeMode="cover"
-                />
-              )}
-              <View style={styles.dishContent}>
-                <Text style={styles.dishName}>{dish.name}</Text>
-                {dish.description && (
-                  <Text style={styles.dishDescription}>{dish.description}</Text>
-                )}
-                {dish.justification && (
-                  <View style={styles.justificationContainer}>
-                    <MaterialIcons name="info-outline" size={16} color="#4cc9f0" />
-                    <Text style={styles.justificationText}>{dish.justification}</Text>
-                  </View>
-                )}
-              </View>
-            </Pressable>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>No dish suggestions available</Text>
-        )}
-      </View>
+      {/* (Suggested Dishes are shown above inside the left column when filters are visible) */}
 
       {/* Action Buttons */}
       <View style={styles.actions}>
@@ -344,5 +532,130 @@ const styles = StyleSheet.create({
   },
   buttonTextWhite: {
     color: '#fff',
+  },
+  /* Layout for filters */
+  sectionWithFilters: {
+    paddingBottom: 8,
+  },
+  rowContainer: {
+    alignItems: 'flex-start',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  column: {
+    flexDirection: 'column',
+  },
+  leftColumn: {
+    flex: 1,
+  },
+  filterToggleButton: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  filterToggleText: {
+    marginLeft: 6,
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  filterPanel: {
+    width: 260,
+    backgroundColor: '#fafafa',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e6e6e6',
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  filterTitle: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  filterLabel: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  filterActions: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterSectionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  timeOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  timeChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  timeChipActive: {
+    backgroundColor: '#90be6d',
+    borderColor: '#90be6d',
+  },
+  timeChipText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  timeChipTextActive: {
+    color: '#fff',
+  },
+  /* Mobile overlay styles */
+  modalBackdrop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    flexDirection: 'row',
+  },
+  backdropTouchable: {
+    flex: 1,
+  },
+  modalPanel: {
+    width: '80%',
+    maxWidth: 360,
+    height: '100%',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
 });
