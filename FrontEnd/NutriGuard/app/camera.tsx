@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(30, 30, 30, 0.98)',
-    paddingVertical: 30,
+    paddingVertical: 50,
     paddingHorizontal: 20,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -349,11 +349,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    // LIFTED: translateY moves the controls up so they overlap the bottom of the camera view
+    // This makes the buttons sit slightly above the control panel and overlap the screen bottom.
+    transform: [{ translateY: -20 }],
   },
   previewControls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    // LIFTED: translateY moves the preview controls up for better visibility/overlap
+    transform: [{ translateY: -20 }],
   },
   controlButton: {
     width: 60,
