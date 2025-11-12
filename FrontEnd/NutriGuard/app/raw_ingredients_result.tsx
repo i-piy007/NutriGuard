@@ -184,7 +184,7 @@ export default function RawIngredientsResult() {
       <View style={styles.actions}>
         <TouchableOpacity 
           style={[styles.button, styles.buttonSecondary]}
-          onPress={() => router.push('/camera')}
+          onPress={() => router.push({ pathname: '/camera', params: { mode: 'raw_ingredients' } })}
         >
           <MaterialIcons name="photo-camera" size={20} color="#000" />
           <Text style={styles.buttonText}>Scan Again</Text>
