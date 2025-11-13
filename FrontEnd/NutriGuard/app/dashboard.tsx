@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Text, View, StyleSheet, TouchableOpacity, Image } from "react-native";
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Text, View, StyleSheet, TouchableOpacity, Image, Modal, Pressable, Animated } from "react-native";
 // react-native-circular-progress may not include TypeScript types in this project.
 // Use a ts-ignore to avoid a compile-time error; consider installing types or
 // adding a declaration file if you want stricter typing.
@@ -17,6 +17,9 @@ const Dashboard = () => {
     const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
     const [username, setUsername] = useState<string | null>(null);
     const [bmi, setBmi] = useState<number | null>(null);
+    const [showBmiModal, setShowBmiModal] = useState(false);
+    const [barWidth, setBarWidth] = useState(0);
+    const pointerX = useRef(new Animated.Value(0)).current;
 
     const fetchProfileForBmi = async () => {
         try {
@@ -115,6 +118,23 @@ const Dashboard = () => {
     const fatFill = Math.min(100, (totals.fat / fatGoal) * 100) || 0;
     const sugarFill = Math.min(100, (totals.sugar / sugarGoal) * 100) || 0;
     const fiberFill = Math.min(100, (totals.fiber / fiberGoal) * 100) || 0;
+
+    // Animate pointer when modal opens and bar width is measured
+    useEffect(() => {
+        if (!showBmiModal || !bmi || barWidth <= 0) return;
+
+        const minBmi = 12;
+        const maxBmi = 40;
+        const val = Math.max(minBmi, Math.min(maxBmi, Number(bmi)));
+        const ratio = (val - minBmi) / (maxBmi - minBmi);
+        const target = ratio * barWidth;
+        const adjust = -8; // center pointer
+        Animated.timing(pointerX, {
+            toValue: target + adjust,
+            duration: 500,
+            useNativeDriver: true,
+        }).start();
+    }, [showBmiModal, barWidth, bmi]);
 
     return (
         <View style={styles.container}>
@@ -250,10 +270,71 @@ const Dashboard = () => {
                 <TouchableOpacity
                     style={[styles.actionButton, styles.actionButtonPrimary]}
                     accessibilityLabel="BMI display"
+                    onPress={() => {
+                        if (!bmi) return;
+                        setShowBmiModal(true);
+                    }}
                 >
                     <Text style={styles.actionTitle}>BMI</Text>
                     <Text style={styles.actionValue}>{bmi ? bmi.toString() : '—'}</Text>
                 </TouchableOpacity>
+
+                {/* BMI modal visual */}
+                <Modal visible={showBmiModal} transparent animationType="slide" onRequestClose={() => setShowBmiModal(false)}>
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalCard}>
+                            <Text style={styles.modalTitle}>BMI Visual</Text>
+                            {!bmi ? (
+                                <Text style={styles.modalText}>BMI not available.</Text>
+                            ) : (
+                                <View style={{ width: '100%', alignItems: 'center' }}>
+                                    <View style={styles.bmiBarContainer} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
+                                        <View style={[styles.bmiSegment, { flex: 65, backgroundColor: '#8ecae6' }]} />
+                                        <View style={[styles.bmiSegment, { flex: 65, backgroundColor: '#90be6d' }]} />
+                                        <View style={[styles.bmiSegment, { flex: 50, backgroundColor: '#ffd166' }]} />
+                                        <View style={[styles.bmiSegment, { flex: 100, backgroundColor: '#f94144' }]} />
+
+                                        {barWidth > 0 && (
+                                            <Animated.View style={[styles.pointer, { transform: [{ translateX: pointerX }] }]}>
+                                                <View style={styles.pointerCircle} />
+                                                <View style={styles.pointerLine} />
+                                            </Animated.View>
+                                        )}
+                                    </View>
+
+                                    <View style={styles.bmiLabelsRow}>
+                                        <View style={{ flex: 65, alignItems: 'center' }}>
+                                            <Text style={styles.bmiLabel}>Underweight
+                                                <Text style={styles.bmiLabelSmall}>{'\n< 18.5'}</Text>
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 65, alignItems: 'center' }}>
+                                            <Text style={styles.bmiLabel}>Normal
+                                                <Text style={styles.bmiLabelSmall}>{'\n18.5–24.9'}</Text>
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 50, alignItems: 'center' }}>
+                                            <Text style={styles.bmiLabel}>Overweight
+                                                <Text style={styles.bmiLabelSmall}>{'\n25–29.9'}</Text>
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 100, alignItems: 'center' }}>
+                                            <Text style={styles.bmiLabel}>Obesity
+                                                <Text style={styles.bmiLabelSmall}>{'\n≥ 30'}</Text>
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.modalText}><Text style={styles.modalTextBold}>Your BMI: </Text><Text style={styles.modalTextBold}>{bmi}</Text></Text>
+                                </View>
+                            )}
+
+                            <Pressable style={styles.closeButton} onPress={() => setShowBmiModal(false)}>
+                                <Text style={styles.closeButtonText}>Close</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </Modal>
 
                 <TouchableOpacity
                     style={[styles.actionButton, styles.actionButtonSecondary]}
@@ -470,5 +551,98 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: "#000000",
         marginTop: 6,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalCard: {
+        width: '100%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 18,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
+        color: '#111',
+    },
+    modalText: {
+        fontSize: 13,
+        color: '#333',
+        textAlign: 'center',
+        marginVertical: 8,
+    },
+    modalTextBold: {
+        fontSize: 13,
+        color: '#111',
+        fontWeight: '700',
+    },
+    bmiBarContainer: {
+        width: '100%',
+        height: 36,
+        flexDirection: 'row',
+        borderRadius: 8,
+        overflow: 'hidden',
+        position: 'relative',
+        marginVertical: 12,
+    },
+    bmiSegment: {
+        height: '100%',
+    },
+    pointer: {
+        position: 'absolute',
+        top: -22,
+        left: 0,
+        width: 16,
+        alignItems: 'center',
+    },
+    pointerCircle: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#333',
+    },
+    pointerLine: {
+        width: 2,
+        height: 38,
+        backgroundColor: '#333',
+        marginTop: 2,
+    },
+    bmiLabelsRow: {
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+    },
+    bmiLabel: {
+        fontSize: 10,
+        color: '#333',
+        textAlign: 'center',
+        fontWeight: '700',
+    },
+    bmiLabelSmall: {
+        fontSize: 11,
+        color: '#555',
+        textAlign: 'center',
+        lineHeight: 14,
+    },
+    closeButton: {
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        backgroundColor: '#90be6d',
+        borderRadius: 8,
+    },
+    closeButtonText: {
+        color: '#fff',
+        fontWeight: '700',
     },
 });
