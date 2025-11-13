@@ -15,6 +15,10 @@ import base64
 import httpx
 import requests
 import json
+import uuid
+import asyncio
+from datetime import timedelta
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -816,14 +820,17 @@ async def upload_image(file: UploadFile = File(...)):
     logger.info("Received upload request")
     try:
         logger.info(f"Upload filename: {file.filename}, content_type: {file.content_type}")
-        # Save the file to public directory
-        file_path = public_dir / file.filename
+        # Generate unique filename to avoid collisions
+        original_name = file.filename or "upload.bin"
+        ext = ''.join(Path(original_name).suffixes) or ''
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        file_path = public_dir / unique_name
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         logger.info(f"Saved uploaded file to {file_path}, size={file_path.stat().st_size} bytes")
         
         # Return the public URL
-        image_url = f"https://nutriguard-n98n.onrender.com/public/{file.filename}"
+        image_url = f"{PUBLIC_URL.rstrip('/')}/public/{unique_name}"
         logger.info(f"Image saved and URL returned: {image_url}")
         return {"image_url": image_url}
     except Exception as e:
@@ -973,17 +980,58 @@ async def upload_image_clean(file: UploadFile = File(...)):
     logger.info("[upload-image] Received upload request")
     try:
         logger.info(f"[upload-image] filename={file.filename}, content_type={file.content_type}")
-        file_path = public_dir / file.filename
+        # Generate unique filename
+        original_name = file.filename or "upload.bin"
+        ext = ''.join(Path(original_name).suffixes) or ''
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        file_path = public_dir / unique_name
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         size = file_path.stat().st_size
         logger.info(f"[upload-image] Saved {file_path} ({size} bytes)")
-        image_url = f"{PUBLIC_URL.rstrip('/')}/public/{file.filename}"
+        image_url = f"{PUBLIC_URL.rstrip('/')}/public/{unique_name}"
         logger.info(f"[upload-image] Returning image_url: {image_url}")
         return {"image_url": image_url}
     except Exception as e:
         logger.exception(f"[upload-image] Error saving file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Public directory retention cleanup ---
+RETENTION_DAYS = 7
+
+
+async def _cleanup_public_dir_periodically():
+    """Delete files in public/ older than RETENTION_DAYS. Runs daily."""
+    while True:
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
+            removed = 0
+            for p in public_dir.iterdir():
+                try:
+                    if not p.is_file():
+                        continue
+                    mtime = datetime.utcfromtimestamp(p.stat().st_mtime)
+                    if mtime < cutoff:
+                        p.unlink(missing_ok=True)
+                        removed += 1
+                except Exception:
+                    logger.exception(f"Failed evaluating/removing {p}")
+            if removed:
+                logger.info(f"[cleanup] Removed {removed} expired public files (>{RETENTION_DAYS} days)")
+        except Exception:
+            logger.exception("[cleanup] Error during public dir cleanup")
+        # Sleep roughly 24 hours
+        await asyncio.sleep(60 * 60 * 24)
+
+
+@app.on_event("startup")
+async def _startup_cleanup_task():
+    try:
+        asyncio.create_task(_cleanup_public_dir_periodically())
+        logger.info(f"Scheduled public dir cleanup task (retention={RETENTION_DAYS} days)")
+    except Exception:
+        logger.exception("Failed to schedule cleanup task")
 
 
 class ImageURLRequest(BaseModel):

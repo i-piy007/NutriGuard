@@ -140,9 +140,15 @@ export default function RawIngredientsResult() {
       
       console.log('Applying filters:', filterData);
       
+      // Read token for auth-aware defaults on backend
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const token = await AsyncStorage.getItem('token');
       const response = await fetch('https://nutriguard-n98n.onrender.com/suggest-dishes-with-filters', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(filterData),
       });
       
