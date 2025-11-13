@@ -315,9 +315,9 @@ def _build_recipe_prompt(ingredients: List[str], filters: Dict[str, Any]) -> str
     diabetic = bool(filters.get('diabetic'))
     dietary_line = 'Prioritize low glycemic, diabetic-friendly choices.' if diabetic else 'Avoid excessive sugar and saturated fats.'
     return (
-        "You are a culinary assistant. Based on these raw ingredients: "
+        "You are a culinary assistant focused on Indian cuisine. Based on these raw ingredients: "
         f"{', '.join(ingredients)}. "
-        "Suggest 5 dish ideas that can realistically be made with them. "
+        "Suggest 5 Indian dishes (traditional or popular regional) that can realistically be made with them. Prefer Indian preparations and naming; adapt non-Indian ideas into Indian-style where needed. "
         f"Target mealtimes: {times}. Target age group: {age}. {dietary_line} "
         "For each dish provide: name, a concise description, and a short justification referencing the ingredients and filters. "
         "Return JSON with shape {\"dishes\": [{\"name\": str, \"description\": str, \"justification\": str}]}. No prose, JSON only."

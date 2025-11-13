@@ -249,8 +249,10 @@ export default function RawIngredientsResult() {
               </View>
               {isLoadingFilters ? (
                 <Text style={styles.emptyText}>Loading filtered dishes...</Text>
-              ) : Array.isArray(displayDishes) && displayDishes.length > 0 ? (
-                displayDishes.map((dish: any, index: number) => (
+              ) : Array.isArray(displayDishes) && displayDishes.filter((d: any) => d && typeof d.name === 'string' && d.name.trim().length > 0).length > 0 ? (
+                displayDishes
+                  .filter((dish: any) => dish && typeof dish.name === 'string' && dish.name.trim().length > 0)
+                  .map((dish: any, index: number) => (
                   <Pressable key={index} style={styles.dishCard} onPress={() => {
                     try {
                       router.push({ pathname: '/recipe_detail', params: { dish: JSON.stringify(dish) } });
@@ -324,7 +326,7 @@ export default function RawIngredientsResult() {
                   {[
                     { key: 'child', label: 'Child' },
                     { key: 'adult', label: 'Adult' },
-                    { key: 'Senior', label: 'Senior' },
+                    { key: 'old', label: 'Senior' },
                   ].map(opt => (
                     <TouchableOpacity
                       key={opt.key}
