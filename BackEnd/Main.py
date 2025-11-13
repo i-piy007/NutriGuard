@@ -14,6 +14,7 @@ from pathlib import Path
 import base64
 import httpx
 import requests
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -218,6 +219,128 @@ app.mount("/public", StaticFiles(directory="public"), name="public")
 
 class ImageRequest(BaseModel):
     image_url: str  # Now expects a URL to the image
+
+
+# --- Filter defaults and prompt helpers ---
+def _age_bucket(age: Optional[int]) -> Optional[str]:
+    try:
+        if age is None:
+            return None
+        a = int(age)
+        if a < 13:
+            return 'child'
+        if a >= 60:
+            return 'old'
+        return 'adult'
+    except Exception:
+        return None
+
+
+def _get_user_profile_row(user_id: int) -> Optional[Dict[str, Any]]:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT id, email, username, name, height, weight, gender, age, is_diabetic FROM users WHERE id = ?',
+            (user_id,),
+        )
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {
+            'id': row[0],
+            'email': row[1],
+            'username': row[2],
+            'name': row[3],
+            'height': row[4],
+            'weight': row[5],
+            'gender': row[6],
+            'age': row[7],
+            'is_diabetic': None if row[8] is None else bool(row[8]),
+        }
+    except Exception:
+        logger.exception('Failed to fetch user profile for defaults')
+        return None
+
+
+def _default_filters_for_user(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    defaults = {
+        'times': ['breakfast', 'lunch', 'snacks', 'dinner'],
+        'age': 'adult',
+        'diabetic': False,
+    }
+    try:
+        if not payload:
+            return defaults
+        user_id = int(payload.get('user_id'))
+        profile = _get_user_profile_row(user_id)
+        if not profile:
+            return defaults
+        age_b = _age_bucket(profile.get('age')) or defaults['age']
+        diabetic = defaults['diabetic'] if profile.get('is_diabetic') is None else bool(profile.get('is_diabetic'))
+        return {
+            'times': defaults['times'],
+            'age': age_b,
+            'diabetic': diabetic,
+        }
+    except Exception:
+        logger.exception('Failed to derive default filters; using base defaults')
+        return defaults
+
+
+def _merge_filters(base: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not override:
+        return base
+    out = dict(base)
+    for k in ('times', 'age', 'diabetic'):
+        if k in override and override[k] not in (None, [], ''):
+            out[k] = override[k]
+    # sanitize times
+    if out.get('times'):
+        allowed = {'breakfast', 'lunch', 'snacks', 'dinner'}
+        out['times'] = [t for t in out['times'] if t in allowed]
+        if not out['times']:
+            out['times'] = base['times']
+    return out
+
+
+def _build_recipe_prompt(ingredients: List[str], filters: Dict[str, Any]) -> str:
+    times = ", ".join(filters.get('times', [])) or 'any mealtime'
+    age = filters.get('age') or 'adult'
+    diabetic = bool(filters.get('diabetic'))
+    dietary_line = 'Prioritize low glycemic, diabetic-friendly choices.' if diabetic else 'Avoid excessive sugar and saturated fats.'
+    return (
+        "You are a culinary assistant. Based on these raw ingredients: "
+        f"{', '.join(ingredients)}. "
+        "Suggest 5 dish ideas that can realistically be made with them. "
+        f"Target mealtimes: {times}. Target age group: {age}. {dietary_line} "
+        "For each dish provide: name, a concise description, and a short justification referencing the ingredients and filters. "
+        "Return JSON with shape {\"dishes\": [{\"name\": str, \"description\": str, \"justification\": str}]}. No prose, JSON only."
+    )
+
+
+def _llm_json(prompt: str) -> Optional[Dict[str, Any]]:
+    try:
+        resp = client.chat.completions.create(
+            model=os.getenv('OPENROUTER_MODEL', 'meta-llama/llama-4-maverick:free'),
+            messages=[
+                {"role": "system", "content": "You return only valid minified JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+        )
+        content = resp.choices[0].message.content if resp and resp.choices else None
+        if not content:
+            return None
+        c = content.strip()
+        if c.startswith('```'):
+            c = c.strip('`')
+            c = re.sub(r'^json\n', '', c, flags=re.I)
+        return json.loads(c)
+    except Exception:
+        logger.exception('LLM JSON generation failed')
+        return None
 
 
 # --- Parsing helpers for robust outputs ---
@@ -938,9 +1061,12 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         
         context_str = ". ".join(context_parts) + "."
         
-        # Call AI with specialized prompt for raw ingredients - requesting JSON format with ranking and justification
+        # Call AI with specialized prompt including default filters - requesting JSON with ranking and justification
         logger.info("[identify-raw-ingredients] Calling AI model with personalized raw ingredients prompt")
-        ai_prompt = f"{context_str}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious INDIAN dishes that can be made using these ingredients, prioritizing traditional and popular Indian cuisine recipes. Order them by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
+        # Compute defaults for filters (times, age bucket, diabetic)
+        defaults = _default_filters_for_user(payload)
+        filters_line = f"Default filters to respect: times={defaults['times']}, age={defaults['age']}, diabetic={defaults['diabetic']}."
+        ai_prompt = f"{context_str}\n{filters_line}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious INDIAN dishes that can be made using these ingredients, prioritizing traditional and popular Indian cuisine recipes that match the filters. Order them by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
         
         completion = client.chat.completions.create(
             extra_headers={
@@ -1078,7 +1204,8 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         return {
             "ingredients": ingredients,
             "dishes": dishes,
-            "raw_response": response_text
+            "raw_response": response_text,
+            "filters_applied": defaults
         }
 
     except HTTPException:
@@ -1086,6 +1213,60 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
     except Exception as e:
         logger.exception(f"[identify-raw-ingredients] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SuggestDishesWithFiltersRequest(BaseModel):
+    ingredients: List[str]
+    times: Optional[List[str]] = None
+    age: Optional[str] = None  # child | adult | old
+    diabetic: Optional[bool] = None
+
+
+@app.post('/suggest-dishes-with-filters')
+async def suggest_dishes_with_filters(req: SuggestDishesWithFiltersRequest, authorization: Optional[str] = Header(None)):
+    """Re-generate dish suggestions for provided ingredients with explicit filters.
+    Merges provided filters over defaults derived from the authenticated profile when available.
+    """
+    try:
+        payload = get_user_from_auth_header(authorization)
+        defaults = _default_filters_for_user(payload)
+        merged = _merge_filters(defaults, {
+            'times': req.times,
+            'age': req.age,
+            'diabetic': req.diabetic,
+        })
+
+        ingredients = [s for s in (req.ingredients or []) if isinstance(s, str) and s.strip()]
+        if not ingredients:
+            raise HTTPException(status_code=400, detail='ingredients must be a non-empty list of strings')
+
+        prompt = _build_recipe_prompt(ingredients, merged)
+        data = _llm_json(prompt) or {}
+        dishes = data.get('dishes') or []
+
+        # Optional enrichment with images via Spoonacular
+        enriched = []
+        for d in dishes[:5]:
+            name = (d.get('name') or '').strip()
+            if not name:
+                continue
+            image_url = None
+            try:
+                if SPOONACULAR_API_KEY:
+                    info = spoonacular_search_recipe(name, include_ingredients=ingredients)
+                    if info and info.get('image'):
+                        image_url = info['image']
+            except Exception:
+                pass
+            d['image_url'] = image_url
+            enriched.append(d)
+
+        return {"dishes": enriched or dishes, "filters_applied": merged}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception('/suggest-dishes-with-filters failed')
+        raise HTTPException(status_code=500, detail='Failed to suggest dishes with filters')
 
 
 # New clean identify endpoint: accepts image_url, sends to model, returns raw model JSON

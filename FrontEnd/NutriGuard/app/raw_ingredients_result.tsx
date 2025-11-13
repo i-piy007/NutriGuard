@@ -109,15 +109,85 @@ export default function RawIngredientsResult() {
   const { width } = useWindowDimensions();
   const [showFilters, setShowFilters] = useState(false);
   const [filterTimes, setFilterTimes] = useState({
-    breakfast: false,
-    lunch: false,
-    snacks: false,
-    dinner: false,
+    breakfast: true,
+    lunch: true,
+    snacks: true,
+    dinner: true,
   });
   // Age filter: single-select string ('child' | 'adult' | 'old')
-  const [filterAge, setFilterAge] = useState<string | null>(null);
+  const [filterAge, setFilterAge] = useState<string | null>('adult');
   // Diabetes toggle similar to profile (boolean)
   const [filterDiabetic, setFilterDiabetic] = useState(false);
+  // Filtered dishes state and loading
+  const [filteredDishes, setFilteredDishes] = useState<Dish[] | null>(null);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+
+  const applyFilters = async () => {
+    try {
+      setIsLoadingFilters(true);
+      
+      // Build filter object with selected times
+      const selectedTimes = Object.entries(filterTimes)
+        .filter(([_, selected]) => selected)
+        .map(([time]) => time);
+      
+      const filterData = {
+        ingredients,
+        times: selectedTimes,
+        age: filterAge,
+        diabetic: filterDiabetic,
+      };
+      
+      console.log('Applying filters:', filterData);
+      
+      const response = await fetch('https://nutriguard-n98n.onrender.com/suggest-dishes-with-filters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filterData),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Filter request failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Filtered dishes response:', data);
+      
+      // Update filtered dishes
+      if (data.dishes && Array.isArray(data.dishes)) {
+        setFilteredDishes(data.dishes);
+      }
+      
+      // Close filter panel on mobile
+      setShowFilters(false);
+    } catch (error) {
+      console.error('Error applying filters:', error);
+      alert('Failed to apply filters. Please try again.');
+    } finally {
+      setIsLoadingFilters(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setFilterTimes({ breakfast: true, lunch: true, snacks: true, dinner: true });
+    setFilterAge('adult');
+    setFilterDiabetic(false);
+    setFilteredDishes(null);
+  };
+
+  // Auto-apply default filters once on initial load (not when opened from history)
+  const autoAppliedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (autoAppliedRef.current) return;
+    if (fromHistory === 'true') return;
+    if (ingredients.length === 0) return;
+    autoAppliedRef.current = true;
+    // Apply default filters to get tailored dishes for the first render
+    applyFilters();
+  }, [fromHistory, ingredients]);
+
+  // Use filtered dishes if available, otherwise use original dishes
+  const displayDishes = filteredDishes !== null ? filteredDishes : dishes;
 
   return (
     <ScrollView style={styles.container}>
@@ -167,9 +237,14 @@ export default function RawIngredientsResult() {
               <View style={styles.sectionHeader}>
                 <MaterialIcons name="restaurant" size={20} color="#4cc9f0" />
                 <Text style={[styles.sectionTitle, { fontSize: 16, marginLeft: 8 }]}>Suggested Dishes</Text>
+                {filteredDishes !== null && (
+                  <Text style={styles.filteredBadge}>(Filtered)</Text>
+                )}
               </View>
-              {Array.isArray(dishes) && dishes.length > 0 ? (
-                dishes.map((dish: any, index: number) => (
+              {isLoadingFilters ? (
+                <Text style={styles.emptyText}>Loading filtered dishes...</Text>
+              ) : Array.isArray(displayDishes) && displayDishes.length > 0 ? (
+                displayDishes.map((dish: any, index: number) => (
                   <Pressable key={index} style={styles.dishCard} onPress={() => {
                     try {
                       router.push({ pathname: '/recipe_detail', params: { dish: JSON.stringify(dish) } });
@@ -266,17 +341,12 @@ export default function RawIngredientsResult() {
               </View>
 
               <View style={styles.filterActions}>
-                <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={() => {
-                  setFilterTimes({ breakfast: false, lunch: false, snacks: false, dinner: false });
-                  setFilterAge(null); setFilterDiabetic(false);
-                }}>
+                <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={clearFilters}>
                   <Text style={styles.buttonText}>Clear</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={() => {
-                  // apply logic later
-                }}>
-                  <Text style={[styles.buttonText, styles.buttonTextWhite]}>Apply</Text>
+                <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={applyFilters} disabled={isLoadingFilters}>
+                  <Text style={[styles.buttonText, styles.buttonTextWhite]}>{isLoadingFilters ? 'Loading...' : 'Apply'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -348,15 +418,12 @@ export default function RawIngredientsResult() {
                 </View>
 
                 <View style={styles.filterActions}>
-                  <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={() => {
-                    setFilterTimes({ breakfast: false, lunch: false, snacks: false, dinner: false });
-                    setFilterAge(null); setFilterDiabetic(false);
-                  }}>
+                  <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={clearFilters}>
                     <Text style={styles.buttonText}>Clear</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={() => setShowFilters(false)}>
-                    <Text style={[styles.buttonText, styles.buttonTextWhite]}>Apply</Text>
+                  <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={applyFilters} disabled={isLoadingFilters}>
+                    <Text style={[styles.buttonText, styles.buttonTextWhite]}>{isLoadingFilters ? 'Loading...' : 'Apply'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -427,6 +494,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginLeft: 8,
+  },
+  filteredBadge: {
+    fontSize: 12,
+    color: '#90be6d',
+    fontWeight: '600',
+    marginLeft: 8,
+    fontStyle: 'italic',
   },
   ingredientsList: {
     flexDirection: 'row',
