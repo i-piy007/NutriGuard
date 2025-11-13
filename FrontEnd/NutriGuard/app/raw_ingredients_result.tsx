@@ -23,13 +23,21 @@ export default function RawIngredientsResult() {
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
         const token = await AsyncStorage.getItem('token');
         if (token && params.ingredients && params.dishes) {
+          // Parse ingredients and dishes if they're strings to avoid double-stringification
+          let ingredientsData = params.ingredients;
+          let dishesData = params.dishes;
+          try {
+            if (typeof params.ingredients === 'string') ingredientsData = JSON.parse(params.ingredients);
+            if (typeof params.dishes === 'string') dishesData = JSON.parse(params.dishes);
+          } catch {}
+          
           await fetch('https://nutriguard-n98n.onrender.com/history/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
               image_url: imageUrl,
               scan_type: 'raw_ingredients',
-              result_json: JSON.stringify({ ingredients: params.ingredients, dishes: params.dishes })
+              result_json: JSON.stringify({ ingredients: ingredientsData, dishes: dishesData })
             })
           });
           console.log('Saved raw ingredients scan to history');
@@ -345,7 +353,7 @@ export default function RawIngredientsResult() {
               {/* Diabetes toggle (like profile) */}
               <View style={styles.filterOption}>
                 <Text style={styles.filterLabel}>Diabetic</Text>
-                <Switch value={filterDiabetic} onValueChange={setFilterDiabetic} />
+                <Switch value={filterDiabetic} onValueChange={(val) => setFilterDiabetic(val)} />
               </View>
 
               <View style={styles.filterActions}>
@@ -422,7 +430,7 @@ export default function RawIngredientsResult() {
                 {/* Diabetes toggle (like profile) */}
                 <View style={styles.filterOption}>
                   <Text style={styles.filterLabel}>Diabetic</Text>
-                  <Switch value={filterDiabetic} onValueChange={setFilterDiabetic} />
+                  <Switch value={filterDiabetic} onValueChange={(val) => setFilterDiabetic(val)} />
                 </View>
 
                 <View style={styles.filterActions}>
@@ -721,6 +729,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.35)',
     flexDirection: 'row',
+    zIndex: 1000,
   },
   backdropTouchable: {
     flex: 1,

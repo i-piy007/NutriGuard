@@ -1247,7 +1247,9 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
                 except Exception as e:
                     logger.warning(f"[identify-raw-ingredients] Google image lookup failed for {dish_name}: {e}")
 
-        logger.info(f"[identify-raw-ingredients] Returning {len(ingredients)} ingredients and {len(dishes)} dishes")
+        # Log image status for debugging
+        dishes_with_images = sum(1 for d in dishes if d.get('image_url'))
+        logger.info(f"[identify-raw-ingredients] Returning {len(ingredients)} ingredients and {len(dishes)} dishes ({dishes_with_images} with images)")
 
         return {
             "ingredients": ingredients,
@@ -1292,20 +1294,47 @@ async def suggest_dishes_with_filters(req: SuggestDishesWithFiltersRequest, auth
         data = _llm_json(prompt) or {}
         dishes = data.get('dishes') or []
 
-        # Optional enrichment with images via Spoonacular
+        # Enrich with images via Spoonacular and Google fallback
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        google_cx = os.getenv("GOOGLE_CX")
+        
         enriched = []
         for d in dishes[:5]:
             name = (d.get('name') or '').strip()
             if not name:
                 continue
             image_url = None
+            
+            # Try Spoonacular first
             try:
                 if SPOONACULAR_API_KEY:
                     info = spoonacular_search_recipe(name, include_ingredients=ingredients)
                     if info and info.get('image'):
                         image_url = info['image']
             except Exception:
-                pass
+                logger.debug(f"Spoonacular lookup failed for '{name}'")
+            
+            # Fallback to Google image search if no image yet
+            if not image_url and google_api_key and google_cx:
+                try:
+                    search_url = "https://www.googleapis.com/customsearch/v1"
+                    params = {
+                        "key": google_api_key,
+                        "cx": google_cx,
+                        "q": f"{name} indian food dish",
+                        "searchType": "image",
+                        "num": 1,
+                        "imgSize": "medium"
+                    }
+                    resp = requests.get(search_url, params=params, timeout=5)
+                    if resp.status_code == 200:
+                        data_json = resp.json()
+                        if data_json.get("items"):
+                            image_url = data_json["items"][0].get("link")
+                            logger.info(f"[filters] Found image for {name} via Google")
+                except Exception as e:
+                    logger.debug(f"Google image lookup failed for '{name}': {e}")
+            
             d['image_url'] = image_url
             enriched.append(d)
 

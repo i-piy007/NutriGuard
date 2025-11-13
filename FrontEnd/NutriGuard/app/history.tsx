@@ -52,37 +52,51 @@ export default function History() {
     try {
       const parsed = JSON.parse(item.result_json);
       if (item.scan_type === 'food' && parsed.itemName) return parsed.itemName;
-      if (item.scan_type === 'raw_ingredients') return 'Raw Ingredients';
-    } catch {}
+      if (item.scan_type === 'raw_ingredients') {
+        const ingredients = parsed.ingredients || [];
+        if (Array.isArray(ingredients) && ingredients.length > 0) {
+          return `${ingredients.length} Ingredient${ingredients.length > 1 ? 's' : ''}`;
+        }
+        return 'Raw Ingredients';
+      }
+    } catch (e) {
+      console.error('Error parsing history item:', e);
+    }
     return item.scan_type === 'food' ? 'Food Scan' : 'Ingredient Scan';
   };
 
   const handlePress = (item: HistoryItem) => {
     try {
       const parsed = JSON.parse(item.result_json);
+      console.log('History item parsed:', { scan_type: item.scan_type, parsed, image_url: item.image_url });
+      
       if (item.scan_type === 'food') {
         router.push({
           pathname: '/food_add',
           params: {
-            imageUrl: item.image_url,
+            imageUrl: item.image_url || '',
             itemName: parsed.itemName || 'Food',
             nutrition: JSON.stringify(parsed.nutrition || {}),
             fromHistory: 'true'
           }
         });
       } else if (item.scan_type === 'raw_ingredients') {
+        // Ensure ingredients and dishes are arrays
+        const ingredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
+        const dishes = Array.isArray(parsed.dishes) ? parsed.dishes : [];
+        
         router.push({
           pathname: '/raw_ingredients_result',
           params: {
-            imageUrl: item.image_url,
-            ingredients: JSON.stringify(parsed.ingredients || []),
-            dishes: JSON.stringify(parsed.dishes || []),
+            imageUrl: item.image_url || '',
+            ingredients: JSON.stringify(ingredients),
+            dishes: JSON.stringify(dishes),
             fromHistory: 'true'
           }
         });
       }
     } catch (err) {
-      console.error('Error navigating to history item:', err);
+      console.error('Error navigating to history item:', err, item);
     }
   };
 
@@ -110,9 +124,15 @@ export default function History() {
         keyExtractor={item => String(item.id)}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.item} onPress={() => handlePress(item)}>
-            {item.image_url && (
-              <Image source={{ uri: item.image_url }} style={styles.thumbnail} resizeMode="cover" />
-            )}
+            <View style={styles.thumbnailContainer}>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.thumbnail} resizeMode="cover" />
+              ) : (
+                <View style={[styles.thumbnail, styles.placeholderThumbnail]}>
+                  <MaterialIcons name={item.scan_type === 'food' ? 'restaurant' : 'kitchen'} size={32} color="#999" />
+                </View>
+              )}
+            </View>
             <View style={styles.content}>
               <Text style={styles.title}>{getTitle(item)}</Text>
               <Text style={styles.type}>{item.scan_type === 'food' ? 'Food Scan' : 'Ingredient Scan'}</Text>
@@ -144,7 +164,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  thumbnail: { width: 60, height: 60, borderRadius: 8, marginRight: 12, backgroundColor: '#e0e0e0' },
+  thumbnailContainer: { marginRight: 12 },
+  thumbnail: { width: 60, height: 60, borderRadius: 8, backgroundColor: '#e0e0e0' },
+  placeholderThumbnail: { alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
   title: { fontSize: 16, fontWeight: '700', marginBottom: 4, color: '#333' },
   type: { fontSize: 13, color: '#666', marginBottom: 2 },
