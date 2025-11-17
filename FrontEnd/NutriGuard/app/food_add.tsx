@@ -8,6 +8,7 @@ export default function FoodAddScreen() {
   const insets = useSafeAreaInsets();
   const { imageUrl, itemName, nutrition, fromHistory } = useLocalSearchParams();
   console.log('FoodAddScreen route params:', { imageUrl, itemName, nutritionPreview: nutrition ? (typeof nutrition === 'string' ? nutrition.slice(0, 120) + '...' : JSON.stringify(nutrition).slice(0,120) + '...') : null });
+  const [imageError, setImageError] = React.useState(false);
 
   const nutritionData = nutrition ? JSON.parse(nutrition as string) : null;
 
@@ -126,7 +127,20 @@ export default function FoodAddScreen() {
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.scrollContent} style={styles.container}>
       <Text style={styles.title}>Food Identified</Text>
-      {imageUrl && <Image source={{ uri: imageUrl as string }} style={styles.image} />}
+      {imageUrl && !imageError ? (
+        <Image 
+          source={{ uri: imageUrl as string }} 
+          style={styles.image}
+          onError={(e) => {
+            console.warn('[food_add] Failed to load top image', imageUrl, e.nativeEvent);
+            setImageError(true);
+          }}
+        />
+      ) : imageUrl ? (
+        <View style={[styles.image, styles.imagePlaceholder]}>
+          <Text style={{ color: '#999' }}>Image unavailable</Text>
+        </View>
+      ) : null}
       <Text style={styles.itemName}>{itemName}</Text>
 
       {/* Macro summary */}
@@ -205,6 +219,13 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     marginBottom: 16,
+  },
+  imagePlaceholder: {
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   itemName: {
     fontSize: 20,

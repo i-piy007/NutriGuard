@@ -7,6 +7,7 @@ export default function RawIngredientsResult() {
   const params = useLocalSearchParams();
   const imageUrl = params.imageUrl as string;
   const fromHistory = params.fromHistory as string; // Flag to indicate if opened from history
+  const [imageError, setImageError] = useState(false);
 
   type Dish = { name: string; description?: string; justification?: string; image_url?: string | null; steps?: string[]; nutrition?: any; ingredients?: string[] };
 
@@ -209,13 +210,22 @@ export default function RawIngredientsResult() {
       {/* Header with captured image */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Raw Ingredients Analysis</Text>
-        {imageUrl && (
+        {imageUrl && !imageError ? (
           <Image 
             source={{ uri: imageUrl }} 
             style={styles.capturedImage}
             resizeMode="cover"
+            onError={(e) => {
+              console.warn('[raw_ingredients_result] Failed to load top image', imageUrl, e.nativeEvent);
+              setImageError(true);
+            }}
           />
-        )}
+        ) : imageUrl ? (
+          <View style={[styles.capturedImage, styles.capturedImagePlaceholder]}>
+            <MaterialIcons name="image-not-supported" size={40} color="#bbb" />
+            <Text style={{ color: '#999', marginTop: 6, fontSize: 12 }}>Image unavailable</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Ingredients Section with right-side Filter Panel */}
@@ -499,6 +509,13 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     marginTop: 8,
+  },
+  capturedImagePlaceholder: {
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   section: {
     padding: 16,
