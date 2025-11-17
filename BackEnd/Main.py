@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import re
@@ -52,6 +53,15 @@ client = OpenAI(
 
 app = FastAPI()
 
+# Add CORS middleware to allow frontend to fetch images and API endpoints
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Health check endpoint for Render
 @app.get("/")
 def read_root():
@@ -75,7 +85,7 @@ def create_db():
         name TEXT
     )
     """)
-    # metrics: id, user_id, day (YYYY-MM-DD), calories, protein, carbs, fat, sugar, fiber
+    # metrics: id, user_id, day (YYYY-MM-DD), calories, protein, carbs, fat, sugar, fiber, goal_achieved
     cur.execute("""
     CREATE TABLE IF NOT EXISTS metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +97,7 @@ def create_db():
         fat REAL DEFAULT 0,
         sugar REAL DEFAULT 0,
         fiber REAL DEFAULT 0,
+        goal_achieved INTEGER DEFAULT 0,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
     """)
@@ -167,6 +178,18 @@ def create_db():
                     cur.execute(f"ALTER TABLE users ADD COLUMN {col} {coltype}")
                 except Exception:
                     logger.exception(f"Failed to add column {col}")
+        conn.commit()
+
+        # Ensure goal_achieved column exists in metrics table
+        cur.execute("PRAGMA table_info(metrics)")
+        metrics_cols = [r[1] for r in cur.fetchall()]
+        if 'goal_achieved' not in metrics_cols:
+            try:
+                cur.execute("ALTER TABLE metrics ADD COLUMN goal_achieved INTEGER DEFAULT 0")
+                conn.commit()
+                logger.info("Added goal_achieved column to metrics table")
+            except Exception:
+                logger.exception("Failed to add goal_achieved column to metrics")
         conn.commit()
     except Exception:
         logger.exception('Error migrating/ensuring username column')
@@ -628,18 +651,25 @@ async def save_metrics(req: SaveMetricsRequest, authorization: Optional[str] = H
         raise HTTPException(status_code=400, detail="Invalid day format. Use YYYY-MM-DD")
 
     metric_id = get_or_create_metric_for_day(user_id, req.day)
+    
+    # Calculate goal achievement (simple: calorie goal of 2500, can be customized)
+    calories = req.nutrition.get("totals", {}).get("calories", 0)
+    calorie_goal = 2500  # Default goal, could be user-specific in future
+    goal_achieved = 1 if calories >= calorie_goal * 0.8 and calories <= calorie_goal * 1.2 else 0
+    
     # save totals to metrics table
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "UPDATE metrics SET calories = ?, protein = ?, carbs = ?, fat = ?, sugar = ?, fiber = ? WHERE id = ?",
+        "UPDATE metrics SET calories = ?, protein = ?, carbs = ?, fat = ?, sugar = ?, fiber = ?, goal_achieved = ? WHERE id = ?",
         (
-            req.nutrition.get("totals", {}).get("calories", 0),
+            calories,
             req.nutrition.get("totals", {}).get("protein", 0),
             req.nutrition.get("totals", {}).get("carbs", 0),
             req.nutrition.get("totals", {}).get("fat", 0),
             req.nutrition.get("totals", {}).get("sugar", 0),
             req.nutrition.get("totals", {}).get("fiber", 0),
+            goal_achieved,
             metric_id,
         ),
     )
@@ -648,7 +678,7 @@ async def save_metrics(req: SaveMetricsRequest, authorization: Optional[str] = H
     # add items as meals
     for item in req.nutrition.get("items", []):
         add_meal_to_metric(metric_id, item)
-    return {"status": "ok", "metric_id": metric_id}
+    return {"status": "ok", "metric_id": metric_id, "goal_achieved": bool(goal_achieved)}
 
 
 class UserProfileRequest(BaseModel):
@@ -808,6 +838,51 @@ async def get_metrics(day: str, authorization: Optional[str] = Header(None)):
         meals.append({"name": m[0], "calories": m[1], "protein": m[2], "carbs": m[3], "fat": m[4], "sugar": m[5], "fiber": m[6], "raw": m[7]})
     conn.close()
     return {"day": day, "items": meals, "totals": totals}
+
+
+@app.get("/metrics/weekly-status")
+async def get_weekly_status(authorization: Optional[str] = Header(None)):
+    """Get goal achievement status for the current week (Mon-Sun)"""
+    payload = get_user_from_auth_header(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    user_id = int(payload.get("user_id"))
+    
+    # Get current week's Monday
+    today = date.today()
+    days_since_monday = today.weekday()  # 0=Monday, 6=Sunday
+    monday = today - timedelta(days=days_since_monday)
+    
+    # Generate all 7 days of the week
+    week_days = [(monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    
+    weekly_status = []
+    for day_str in week_days:
+        cur.execute("SELECT goal_achieved FROM metrics WHERE user_id = ? AND day = ?", (user_id, day_str))
+        row = cur.fetchone()
+        
+        if row is None:
+            status = "no_data"  # Grey dot
+        elif row[0] == 1:
+            status = "achieved"  # Green dot
+        else:
+            status = "not_achieved"  # Red dot
+        
+        # Get day name (Mon, Tue, etc.)
+        day_obj = datetime.strptime(day_str, "%Y-%m-%d")
+        day_name = day_obj.strftime("%a")  # Mon, Tue, Wed, etc.
+        
+        weekly_status.append({
+            "day": day_str,
+            "day_name": day_name,
+            "status": status
+        })
+    
+    conn.close()
+    return {"weekly_status": weekly_status}
 
 
 @app.get("/ping")

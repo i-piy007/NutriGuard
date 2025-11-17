@@ -12,6 +12,12 @@ import { router } from 'expo-router';
 import { Buffer } from 'buffer';
 import { styleText } from 'util';
 
+type WeekDay = {
+    day: string;
+    day_name: string;
+    status: 'achieved' | 'not_achieved' | 'no_data';
+};
+
 const Dashboard = () => {
     // Start from zeros and load stored totals (replace, don't add to defaults)
     const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
@@ -20,6 +26,7 @@ const Dashboard = () => {
     const [showBmiModal, setShowBmiModal] = useState(false);
     const [barWidth, setBarWidth] = useState(0);
     const pointerX = useRef(new Animated.Value(0)).current;
+    const [weeklyStatus, setWeeklyStatus] = useState<WeekDay[]>([]);
 
     const fetchProfileForBmi = async () => {
         try {
@@ -39,6 +46,21 @@ const Dashboard = () => {
             }
         } catch (e) {
             console.warn('[dashboard] failed to fetch profile for BMI', e);
+        }
+    };
+
+    const fetchWeeklyStatus = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (!token) return;
+            const resp = await fetch('https://nutriguard-n98n.onrender.com/metrics/weekly-status', { 
+                headers: { Authorization: `Bearer ${token}` } 
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            setWeeklyStatus(data.weekly_status || []);
+        } catch (e) {
+            console.warn('[dashboard] failed to fetch weekly status', e);
         }
     };
 
@@ -101,6 +123,7 @@ const Dashboard = () => {
             loadTotals();
             loadUser();
             fetchProfileForBmi();
+            fetchWeeklyStatus();
         }, [loadTotals])
     );
 
@@ -136,8 +159,29 @@ const Dashboard = () => {
         }).start();
     }, [showBmiModal, barWidth, bmi]);
 
+    const getDotColor = (status: string) => {
+        switch (status) {
+            case 'achieved': return '#90be6d';  // Green
+            case 'not_achieved': return '#f94144';  // Red
+            case 'no_data': return '#d0d0d0';  // Grey
+            default: return '#d0d0d0';
+        }
+    };
+
     return (
         <View style={styles.container}>
+            {/* Weekly goal status */}
+            {weeklyStatus.length > 0 && (
+                <View style={styles.weeklyContainer}>
+                    {weeklyStatus.map((day, index) => (
+                        <View key={index} style={styles.daySquare}>
+                            <Text style={styles.dayName}>{day.day_name}</Text>
+                            <View style={[styles.statusDot, { backgroundColor: getDotColor(day.status) }]} />
+                        </View>
+                    ))}
+                </View>
+            )}
+
             {/* Top: Calorie circular progress */}
             <View style={styles.topCard}>
                 <AnimatedCircularProgress
@@ -368,6 +412,41 @@ const styles = StyleSheet.create({
         padding: 16,
         backgroundColor: "#fff",
         justifyContent: "space-between",
+    },
+
+    // === Weekly Status ===
+    weeklyContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+    },
+    daySquare: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 42,
+        height: 50,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    dayName: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 6,
+    },
+    statusDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
     },
 
     // === Top Card ===
