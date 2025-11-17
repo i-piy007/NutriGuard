@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
@@ -246,6 +246,25 @@ app.mount("/public", StaticFiles(directory="public"), name="public")
 
 class ImageRequest(BaseModel):
     image_url: str  # Now expects a URL to the image
+
+
+def _build_public_image_url(filename: str, request: Request) -> str:
+    """Build a public URL for a file in /public that is reachable by the client.
+    Prefer configured PUBLIC_URL when it does not point to localhost; otherwise fallback to request.base_url.
+    """
+    try:
+        base = (PUBLIC_URL or "").rstrip("/")
+        if base and not ("localhost" in base or "127.0.0.1" in base):
+            url = f"{base}/public/{filename}"
+            logger.info(f"[_build_public_image_url] Using PUBLIC_URL base: {url}")
+            return url
+    except Exception:
+        logger.exception("[_build_public_image_url] Error evaluating PUBLIC_URL, falling back to request.base_url")
+    # Fallback to request base URL
+    base_req = str(request.base_url).rstrip("/")
+    url = f"{base_req}/public/{filename}"
+    logger.info(f"[_build_public_image_url] Using request.base_url: {url}")
+    return url
 
 
 # --- Filter defaults and prompt helpers ---
@@ -891,7 +910,7 @@ async def ping():
     return {"ok": True, "time": datetime.utcnow().isoformat()}
 
 @app.post("/upload")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(request: Request, file: UploadFile = File(...)):
     logger.info("Received upload request")
     try:
         logger.info(f"Upload filename: {file.filename}, content_type: {file.content_type}")
@@ -904,8 +923,8 @@ async def upload_image(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         logger.info(f"Saved uploaded file to {file_path}, size={file_path.stat().st_size} bytes")
         
-        # Return the public URL
-        image_url = f"{PUBLIC_URL.rstrip('/')}/public/{unique_name}"
+        # Return a public URL reachable by the client (avoid localhost when on device)
+        image_url = _build_public_image_url(unique_name, request)
         logger.info(f"Image saved and URL returned: {image_url}")
         return {"image_url": image_url}
     except Exception as e:
@@ -1051,7 +1070,7 @@ async def identify_food(request: ImageRequest):
 
 # New clean upload endpoint: accepts multipart file, saves to public/, returns public URL
 @app.post("/upload-image")
-async def upload_image_clean(file: UploadFile = File(...)):
+async def upload_image_clean(request: Request, file: UploadFile = File(...)):
     logger.info("[upload-image] Received upload request")
     try:
         logger.info(f"[upload-image] filename={file.filename}, content_type={file.content_type}")
@@ -1064,7 +1083,7 @@ async def upload_image_clean(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         size = file_path.stat().st_size
         logger.info(f"[upload-image] Saved {file_path} ({size} bytes)")
-        image_url = f"{PUBLIC_URL.rstrip('/')}/public/{unique_name}"
+        image_url = _build_public_image_url(unique_name, request)
         logger.info(f"[upload-image] Returning image_url: {image_url}")
         return {"image_url": image_url}
     except Exception as e:
