@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Pressable, useWindowDimensions, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Pressable, useWindowDimensions, Switch, Modal } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -383,10 +383,14 @@ export default function RawIngredientsResult() {
             </View>
           )}
 
-          {/* Mobile overlay panel (bottom sheet style) */}
-          {width < 700 && showFilters && (
+          {/* Mobile filters modal to avoid z-index/elevation issues on Android */}
+          <Modal
+            visible={width < 700 && showFilters}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowFilters(false)}
+          >
             <View style={styles.modalBackdrop}>
-              {/* Left drawer panel first, backdrop to the right */}
               <View style={styles.modalPanel}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.filterTitle}>Filters</Text>
@@ -460,7 +464,7 @@ export default function RawIngredientsResult() {
               </View>
               <TouchableOpacity style={styles.backdropTouchable} onPress={() => setShowFilters(false)} />
             </View>
-          )}
+          </Modal>
         </View>
       </View>
 
