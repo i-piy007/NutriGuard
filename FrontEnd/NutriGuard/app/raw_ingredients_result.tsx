@@ -166,6 +166,7 @@ export default function RawIngredientsResult() {
       
       const data = await response.json();
       console.log('Filtered dishes response:', data);
+      console.log('Dishes with images:', data.dishes?.map((d: any) => ({ name: d.name, has_image: !!d.image_url, image_url: d.image_url })));
       
       // Update filtered dishes
       if (data.dishes && Array.isArray(data.dishes)) {
@@ -268,12 +269,16 @@ export default function RawIngredientsResult() {
                       router.push('/recipe_detail');
                     }
                   }}>
-                    {dish.image_url && (
+                    {dish.image_url ? (
                       <Image 
                         source={{ uri: dish.image_url }} 
                         style={styles.dishImage}
                         resizeMode="cover"
                       />
+                    ) : (
+                      <View style={[styles.dishImage, styles.dishImagePlaceholder]}>
+                        <MaterialIcons name="restaurant" size={48} color="#ccc" />
+                      </View>
                     )}
                     <View style={styles.dishContent}>
                       <Text style={styles.dishName}>{dish.name}</Text>
@@ -561,6 +566,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 180,
     backgroundColor: '#e0e0e0',
+  },
+  dishImagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   dishContent: {
     padding: 12,
