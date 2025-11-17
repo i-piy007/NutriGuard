@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Text, View, StyleSheet, TouchableOpacity, Image, Modal, Pressable, Animated } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // react-native-circular-progress may not include TypeScript types in this project.
 // Use a ts-ignore to avoid a compile-time error; consider installing types or
 // adding a declaration file if you want stricter typing.
@@ -19,6 +20,7 @@ type WeekDay = {
 };
 
 const Dashboard = () => {
+    const insets = useSafeAreaInsets();
     // Start from zeros and load stored totals (replace, don't add to defaults)
     const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 });
     const [username, setUsername] = useState<string | null>(null);
@@ -185,8 +187,8 @@ const Dashboard = () => {
             {/* Top: Calorie circular progress */}
             <View style={styles.topCard}>
                 <AnimatedCircularProgress
-                    size={180}
-                    width={18}
+                    size={165}
+                    width={16}
                     fill={calorieFill}
                     tintColor={totals.calories > calorieGoal ? '#f40000ff' : '#90be6d'}
                     backgroundColor="#f1f1f1"
@@ -207,8 +209,8 @@ const Dashboard = () => {
             <View style={styles.macroRow}>
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={100}
-                        width={12}
+                        size={90}
+                        width={10}
                         fill={proteinFill}
                         tintColor={totals.protein > proteinGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
@@ -227,8 +229,8 @@ const Dashboard = () => {
 
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={100}
-                        width={12}
+                        size={90}
+                        width={10}
                         fill={carbsFill}
                         tintColor={totals.carbs > carbsGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
@@ -247,8 +249,8 @@ const Dashboard = () => {
 
                 <View style={styles.macroItem}>
                     <AnimatedCircularProgress
-                        size={100}
-                        width={12}
+                        size={90}
+                        width={10}
                         fill={fatFill}
                         tintColor={totals.fat > fatGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
@@ -270,8 +272,8 @@ const Dashboard = () => {
             <View style={styles.microRow}>
                 <View style={styles.microItem}>
                     <AnimatedCircularProgress
-                        size={100}
-                        width={12}
+                        size={90}
+                        width={10}
                         fill={sugarFill}
                         tintColor={totals.sugar > sugarGoal ? '#f40000ff' : '#577590'}
                         backgroundColor="#eee"
@@ -290,8 +292,8 @@ const Dashboard = () => {
 
                 <View style={styles.microItem}>
                     <AnimatedCircularProgress
-                        size={100}
-                        width={12}
+                        size={90}
+                        width={10}
                         fill={fiberFill}
                         tintColor={totals.fiber > fiberGoal ? '#f40000ff' : '#4cc9f0'}
                         backgroundColor="#eee"
@@ -310,7 +312,7 @@ const Dashboard = () => {
             </View>
 
             {/* Bottom: action buttons (BMI, Camera, New Feature) */}
-            <View style={styles.actionsRow}>
+            <View style={[styles.actionsRow, { paddingBottom: Math.max(12, insets.bottom) }]}>
                 <TouchableOpacity
                     style={[styles.actionButton, styles.actionButtonPrimary]}
                     accessibilityLabel="BMI display"
@@ -455,7 +457,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         paddingVertical: 30,
         alignItems: "center",
-        marginBottom: 20,
+        marginBottom: 1,
     },
     topTitle: {
         fontSize: 28,
@@ -476,9 +478,9 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     macroItem: {
-        width: 110,
+        width: 100,
         alignItems: 'center',
-        marginHorizontal: 8,
+        marginHorizontal: 10,
     },
     innerCircle: {
         position: 'absolute',
@@ -503,18 +505,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     calorieValue: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '700',
         color: '#333',
-        marginTop: 6,
+        marginTop: 4,
     },
     calorieGoal: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
     },
 
     calorieLabel: {
-        fontSize: 30,
+        fontSize: 22,
         fontWeight: '700',
         color: '#333',
         marginTop: 10,
@@ -526,8 +528,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
-        paddingHorizontal: 50,
+        marginBottom: 12,
+        paddingHorizontal: 60,
         gap: 10,
     },
     microItem: {
@@ -574,14 +576,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 8,
-        marginBottom: 30,
+        marginTop: 15,
+        marginBottom: 12,
         gap: 10,
     },
     actionButton: {
         flex: 1,
         paddingVertical: 0,
-        height: 84,
+        height: 77,
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
