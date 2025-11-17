@@ -327,7 +327,7 @@ def _build_recipe_prompt(ingredients: List[str], filters: Dict[str, Any]) -> str
 def _llm_json(prompt: str) -> Optional[Dict[str, Any]]:
     try:
         resp = client.chat.completions.create(
-            model=os.getenv('OPENROUTER_MODEL', 'google/gemma-3-4b-it:free'),
+            model=os.getenv('OPENROUTER_MODEL', 'tngtech/deepseek-r1t2-chimera:free'),
             messages=[
                 {"role": "system", "content": "You return only valid minified JSON."},
                 {"role": "user", "content": prompt},
