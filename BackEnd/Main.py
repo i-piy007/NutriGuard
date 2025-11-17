@@ -327,7 +327,7 @@ def _build_recipe_prompt(ingredients: List[str], filters: Dict[str, Any]) -> str
 def _llm_json(prompt: str) -> Optional[Dict[str, Any]]:
     try:
         resp = client.chat.completions.create(
-            model=os.getenv('OPENROUTER_MODEL', 'meta-llama/llama-4-maverick:free'),
+            model=os.getenv('OPENROUTER_MODEL', 'google/gemma-3n-e4b-it:free'),
             messages=[
                 {"role": "system", "content": "You return only valid minified JSON."},
                 {"role": "user", "content": prompt},
@@ -872,14 +872,14 @@ async def identify_food(request: ImageRequest):
         data_uri = f"data:image/jpeg;base64,{b64}"
 
         logger.info("Sending data URI to AI model (base64)")
-        logger.info("Starting AI call: model=%s", "meta-llama/llama-4-maverick:free")
+        logger.info("Starting AI call: model=%s", "google/gemma-3n-e4b-it:free")
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
                 "X-Title": "NutriGuard",
             },
             extra_body={},
-            model="meta-llama/llama-4-maverick:free",
+            model="google/gemma-3n-e4b-it:free",
             messages=[
                 {
                     "role": "user",
@@ -1122,7 +1122,7 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
                 "X-Title": "NutriGuard",
             },
             extra_body={},
-            model="meta-llama/llama-4-maverick:free",
+            model="google/gemma-3n-e4b-it:free",
             messages=[
                 {
                     "role": "user",
@@ -1378,11 +1378,11 @@ async def identify_image(request: ImageURLRequest):
         data_uri = f"data:image/jpeg;base64,{b64}"
 
         # Call the model via OpenRouter's OpenAI client
-        logger.info(f"[identify-image] Calling model meta-llama/llama-4-maverick:free")
+        logger.info(f"[identify-image] Calling model google/gemma-3n-e4b-it:free")
         completion = client.chat.completions.create(
             extra_headers={"HTTP-Referer": "http://localhost:8081", "X-Title": "NutriGuard"},
             extra_body={},
-            model="meta-llama/llama-4-maverick:free",
+            model="google/gemma-3n-e4b-it:free",
             messages=[
                 {
                     "role": "user",
