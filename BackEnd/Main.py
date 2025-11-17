@@ -884,7 +884,7 @@ async def identify_food(request: ImageRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size in 10-20 words nothing extra. DO not mention stuff like condiments and leaves and stuff like that. If there is no food in the image then just respond with Unknown"},
+                        {"type": "text", "text": "don't respond with anything else other than What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size in 10-20 words nothing extra. DO not mention stuff like condiments and leaves and stuff like that. If there is no food in the image then just respond with Unknown"},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
