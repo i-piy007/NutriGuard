@@ -966,14 +966,16 @@ async def identify_food(request: ImageRequest):
         data_uri = f"data:image/jpeg;base64,{b64}"
 
         logger.info("Sending data URI to AI model (base64)")
-        logger.info("Starting AI call: model=%s", "google/gemma-3-4b-it:free")
+        # Use OpenRouter image-specialized model for images and disable reasoning for image calls
+        logger.info("Starting AI call (image) using model=%s", "openrouter/bert-nebulon-alpha")
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
                 "X-Title": "NutriGuard",
             },
-            extra_body={},
-            model="google/gemma-3-4b-it:free",
+            # Explicitly disable chain-of-thought / reasoning features for image calls
+            extra_body={"reasoning": {"enabled": False}},
+            model="openrouter/bert-nebulon-alpha",
             messages=[
                 {
                     "role": "user",
@@ -1210,13 +1212,15 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         filters_line = f"Default filters to respect: times={defaults['times']}, age={defaults['age']}, diabetic={defaults['diabetic']}."
         ai_prompt = f"{context_str}\n{filters_line}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious INDIAN dishes that can be made using these ingredients, prioritizing traditional and popular Indian cuisine recipes that match the filters. Order them by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
         
+        # For raw-ingredients use the OpenRouter image model and disable reasoning
+        logger.info("Calling image model for raw-ingredients: %s", "openrouter/bert-nebulon-alpha")
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
                 "X-Title": "NutriGuard",
             },
-            extra_body={},
-            model="google/gemma-3-4b-it:free",
+            extra_body={"reasoning": {"enabled": False}},
+            model="openrouter/bert-nebulon-alpha",
             messages=[
                 {
                     "role": "user",
@@ -1472,11 +1476,11 @@ async def identify_image(request: ImageURLRequest):
         data_uri = f"data:image/jpeg;base64,{b64}"
 
         # Call the model via OpenRouter's OpenAI client
-        logger.info(f"[identify-image] Calling model google/gemma-3-4b-it:free")
+        logger.info("[identify-image] Calling image model openrouter/bert-nebulon-alpha (reasoning disabled)")
         completion = client.chat.completions.create(
             extra_headers={"HTTP-Referer": "http://localhost:8081", "X-Title": "NutriGuard"},
-            extra_body={},
-            model="google/gemma-3-4b-it:free",
+            extra_body={"reasoning": {"enabled": False}},
+            model="openrouter/bert-nebulon-alpha",
             messages=[
                 {
                     "role": "user",
