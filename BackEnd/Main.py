@@ -34,6 +34,9 @@ logger.info(f"SPOONACULAR_API_KEY set: {bool(SPOONACULAR_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
+# Image model selection (make configurable via env)
+OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "openrouter/bert-nebulon-alpha")
+logger.info(f"OPENROUTER_IMAGE_MODEL set: {OPENROUTER_IMAGE_MODEL}")
 # JWT secret for token signing
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_secret")
 logger.info(f"JWT secret set: {bool(JWT_SECRET and JWT_SECRET != 'change_this_secret')}")
@@ -968,6 +971,8 @@ async def identify_food(request: ImageRequest):
         logger.info("Sending data URI to AI model (base64)")
         # Use OpenRouter image-specialized model for images and disable reasoning for image calls
         logger.info("Starting AI call (image) using model=%s", "openrouter/bert-nebulon-alpha")
+        image_model = os.getenv("OPENROUTER_IMAGE_MODEL", OPENROUTER_IMAGE_MODEL)
+        logger.info("Starting AI call (image) using model=%s", image_model)
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
@@ -975,12 +980,13 @@ async def identify_food(request: ImageRequest):
             },
             # Explicitly disable chain-of-thought / reasoning features for image calls
             extra_body={"reasoning": {"enabled": False}},
-            model="openrouter/bert-nebulon-alpha",
+            model=image_model,
             messages=[
+                {"role": "system", "content": "You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Output JSON schema: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. If no food is visible return {\"items\": []}."},
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "don't respond with anything else other than What Food items are in the image if there is a plate only the items on the plate, give me a list of only names and the serving size in 10-20 words nothing extra. DO not mention stuff like leaves and stuff like that. If there is no food in the image then just respond with Unknown. give one indian, one western and one chinese/snack item if possible."},
+                        {"type": "text", "text": "Identify the food items on the plate and estimate serving sizes. Return EXACTLY valid JSON with the shape: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. Do not include background objects or commentary. If no food is visible return {\"items\": []}."},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
@@ -1008,30 +1014,49 @@ async def identify_food(request: ImageRequest):
         nutrition_data = None
         if CALORIENINJAS_API_KEY and response_text != "Unable to identify item in the image.":
             try:
-                # Sanitize the AI response: remove parenthetical serving info and split into individual items
+                # Prefer strict JSON output from the model: try to parse it
                 logger.info(f"Raw AI identification text: {summarize(response_text, max_words=40)}")
-                cleaned = re.sub(r"\(.*?\)", "", response_text)
-                raw_items = re.split(r",|\n|\band\b", cleaned)
-                # Further clean each item: remove numbering like '1.' or '1) ', and remove trailing '- serving info'
+                parsed_items = None
+                try:
+                    raw_text = response_text
+                    if "```json" in raw_text:
+                        raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+                    elif "```" in raw_text:
+                        raw_text = raw_text.split("```")[1].split("```")[0].strip()
+                    parsed = json.loads(raw_text)
+                    # Expect top-level {"items": [...]}
+                    if isinstance(parsed, dict) and isinstance(parsed.get("items"), list):
+                        parsed_items = parsed.get("items")
+                except Exception:
+                    parsed_items = None
+
                 items_to_query = []
-                for s in raw_items:
-                    if not s or not s.strip():
-                        continue
-                    it = s.strip()
-                    # remove common leading bullets/markers (e.g., '-', '•', '*') and extra whitespace
-                    it = re.sub(r'^[\-\u2022\u2023\*\•\s]+', '', it)
-                    # remove leading numbering (e.g., '1. ', '2) ')
-                    it = re.sub(r"^\s*\d+\s*[\.\)]\s*", "", it)
-                    # remove trailing hyphenated serving descriptions (e.g., ' - 1 Plate') but only after bullets removed
-                    it = re.sub(r"\s+-\s+.*$", "", it)
-                    # remove leftover parenthetical or size words if any (already removed earlier)
-                    it = re.sub(r"\(.*?\)", "", it)
-                    # remove common trailing quantity words (piece, serving, large, small)
-                    it = re.sub(r"\b(piece|pieces|serving|servings|large|small|slice|slices)\b", "", it, flags=re.I)
-                    it = it.strip()
-                    if it:
-                        items_to_query.append(it)
-                logger.info(f"Parsed items to query CalorieNinjas: {items_to_query}")
+                if parsed_items:
+                    for it in parsed_items:
+                        try:
+                            name = (it.get("name") if isinstance(it, dict) else str(it)).strip()
+                        except Exception:
+                            name = str(it).strip()
+                        if name:
+                            items_to_query.append(name)
+                    logger.info(f"Parsed JSON items to query CalorieNinjas: {items_to_query}")
+                else:
+                    # Fallback: sanitize the AI response text as before
+                    cleaned = re.sub(r"\(.*?\)", "", response_text)
+                    raw_items = re.split(r",|\n|\band\b", cleaned)
+                    for s in raw_items:
+                        if not s or not s.strip():
+                            continue
+                        it = s.strip()
+                        it = re.sub(r'^[\-\u2022\u2023\*\•\s]+', '', it)
+                        it = re.sub(r"^\s*\d+\s*[\.\)]\s*", "", it)
+                        it = re.sub(r"\s+-\s+.*$", "", it)
+                        it = re.sub(r"\(.*?\)", "", it)
+                        it = re.sub(r"\b(piece|pieces|serving|servings|large|small|slice|slices)\b", "", it, flags=re.I)
+                        it = it.strip()
+                        if it:
+                            items_to_query.append(it)
+                    logger.info(f"Parsed (fallback) items to query CalorieNinjas: {items_to_query}")
 
                 cn_headers = {"X-Api-Key": CALORIENINJAS_API_KEY}
                 all_items = []
@@ -1218,21 +1243,23 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         filters_line = f"Default filters to respect: times={defaults['times']}, age={defaults['age']}, diabetic={defaults['diabetic']}."
         ai_prompt = f"{context_str}\n{filters_line}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious INDIAN dishes that can be made using these ingredients, prioritizing traditional and popular Indian cuisine recipes that match the filters. Order them by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
         
-        # For raw-ingredients use the OpenRouter image model and disable reasoning
-        logger.info("Calling image model for raw-ingredients: %s", "openrouter/bert-nebulon-alpha")
+        # For raw-ingredients use the configurable OpenRouter image model and disable reasoning
+        image_model = os.getenv("OPENROUTER_IMAGE_MODEL", OPENROUTER_IMAGE_MODEL)
+        logger.info("Calling image model for raw-ingredients: %s", image_model)
         completion = client.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "http://localhost:8081",
                 "X-Title": "NutriGuard",
             },
             extra_body={"reasoning": {"enabled": False}},
-            model="openrouter/bert-nebulon-alpha",
+            model=image_model,
             messages=[
+                {"role": "system", "content": "You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Required JSON shape: {\"ingredients\": [\"ing1\", ...], \"dishes\": [{\"name\": \"Dish\", \"description\": \"...\", \"justification\": \"...\"}]}. If no ingredients, return {\"ingredients\": [], \"dishes\": []}."},
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "text", 
+                            "type": "text",
                             "text": ai_prompt
                         },
                         {"type": "image_url", "image_url": {"url": data_uri}}
@@ -1481,17 +1508,19 @@ async def identify_image(request: ImageURLRequest):
         b64 = base64.b64encode(image_bytes).decode("utf-8")
         data_uri = f"data:image/jpeg;base64,{b64}"
 
-        # Call the model via OpenRouter's OpenAI client
-        logger.info("[identify-image] Calling image model openrouter/bert-nebulon-alpha (reasoning disabled)")
+        # Call the model via OpenRouter's OpenAI client; require JSON output
+        image_model = os.getenv("OPENROUTER_IMAGE_MODEL", OPENROUTER_IMAGE_MODEL)
+        logger.info("[identify-image] Calling image model %s (reasoning disabled)", image_model)
         completion = client.chat.completions.create(
             extra_headers={"HTTP-Referer": "http://localhost:8081", "X-Title": "NutriGuard"},
             extra_body={"reasoning": {"enabled": False}},
-            model="openrouter/bert-nebulon-alpha",
+            model=image_model,
             messages=[
+                {"role": "system", "content": "You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Expected JSON: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. If no food present return {\"items\": []}."},
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Identify the food items on the plate in this image. Ignore background details; list only item names and estimated serving sizes. If no food, reply with 'None'. Provide a concise JSON-compatible list."},
+                        {"type": "text", "text": "Identify the food items on the plate in this image. Return EXACT valid JSON using the schema in the system message. Do not include commentary."},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
@@ -1500,12 +1529,25 @@ async def identify_image(request: ImageURLRequest):
 
         logger.info(f"[identify-image] Model call complete; preview: {summarize(completion, max_words=20)}")
 
-        # Basic validation of model response
         if getattr(completion, "error", None):
             logger.error(f"[identify-image] Model error: {completion.error}")
             raise HTTPException(status_code=500, detail=f"Model error: {completion.error}")
 
-        return {"model_response": completion}
+        # Try to parse JSON from model output (handle fenced code blocks)
+        response_text = completion.choices[0].message.content if completion and completion.choices and completion.choices[0].message else None
+        if not response_text:
+            raise HTTPException(status_code=500, detail="Empty response from image model")
+        try:
+            raw_text = response_text
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+            parsed = json.loads(raw_text)
+            return {"parsed": parsed, "raw_response": response_text}
+        except Exception:
+            logger.exception("[identify-image] Failed to parse JSON from model output; returning raw text")
+            return {"raw_text": response_text, "model_response_preview": summarize(completion, max_words=20)}
     except HTTPException:
         raise
     except Exception as e:
