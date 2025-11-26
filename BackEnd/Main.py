@@ -1018,10 +1018,16 @@ async def identify_food(request: ImageRequest):
                     if not s or not s.strip():
                         continue
                     it = s.strip()
+                    # remove common leading bullets/markers (e.g., '-', '•', '*') and extra whitespace
+                    it = re.sub(r'^[\-\u2022\u2023\*\•\s]+', '', it)
                     # remove leading numbering (e.g., '1. ', '2) ')
-                    it = re.sub(r"^\s*\d+\s*[\.|\)]\s*", "", it)
-                    # remove trailing hyphenated serving descriptions (e.g., ' - 1 Plate')
-                    it = re.sub(r"\s*-\s*.*$", "", it)
+                    it = re.sub(r"^\s*\d+\s*[\.\)]\s*", "", it)
+                    # remove trailing hyphenated serving descriptions (e.g., ' - 1 Plate') but only after bullets removed
+                    it = re.sub(r"\s+-\s+.*$", "", it)
+                    # remove leftover parenthetical or size words if any (already removed earlier)
+                    it = re.sub(r"\(.*?\)", "", it)
+                    # remove common trailing quantity words (piece, serving, large, small)
+                    it = re.sub(r"\b(piece|pieces|serving|servings|large|small|slice|slices)\b", "", it, flags=re.I)
                     it = it.strip()
                     if it:
                         items_to_query.append(it)
