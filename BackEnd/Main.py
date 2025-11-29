@@ -34,8 +34,8 @@ logger.info(f"SPOONACULAR_API_KEY set: {bool(SPOONACULAR_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
-# Image model selection (make configurable via env) - using free Mistral vision model
-OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "mistralai/mistral-small-3.1-24b-instruct:free")
+# Image model selection (make configurable via env) - using free Gemma 3 4b vision model
+OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemma-3-4b-it:free")
 logger.info(f"OPENROUTER_IMAGE_MODEL set: {OPENROUTER_IMAGE_MODEL}")
 # JWT secret for token signing
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_secret")
@@ -1131,42 +1131,63 @@ async def identify_food(request: ImageRequest):
         data_uri = f"data:image/jpeg;base64,{b64}"
 
         logger.info("Sending data URI to AI model (base64)")
-        # Use OpenRouter image-specialized model for images and disable reasoning for image calls
-        logger.info("Starting AI call (image) using model=%s", "openrouter/bert-nebulon-alpha")
+        # Use OpenRouter API directly with Gemma vision model
         image_model = os.getenv("OPENROUTER_IMAGE_MODEL", OPENROUTER_IMAGE_MODEL)
         logger.info("Starting AI call (image) using model=%s", image_model)
-        completion = client.chat.completions.create(
-            extra_headers={
-                "HTTP-Referer": "http://localhost:8081",
-                "X-Title": "NutriGuard",
-            },
-            # Explicitly disable chain-of-thought / reasoning features for image calls
-            extra_body={"reasoning": {"enabled": False}},
-            model=image_model,
-            messages=[
-                {"role": "system", "content": "You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Output JSON schema: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. If no food is visible return {\"items\": []}."},
+        
+        openrouter_payload = {
+            "model": image_model,
+            "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Identify the food items on the plate and estimate serving sizes. Return EXACTLY valid JSON with the shape: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. Do not include background objects or commentary. If no food is visible return {\"items\": []}."},
-                        {"type": "image_url", "image_url": {"url": data_uri}}
+                        {
+                            "type": "text",
+                            "text": "You are an image recognition assistant. Identify the food items on the plate and estimate serving sizes. Return EXACTLY valid JSON with the shape: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. Do not include background objects or commentary. If no food is visible return {\"items\": []}."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_uri
+                            }
+                        }
                     ]
                 }
-            ],
-        )
-        logger.info(f"AI completion preview: {summarize(completion)}")
-
-        # Check for explicit errors returned by the client
-        if getattr(completion, "error", None):
-            logger.error(f"AI returned error: {completion.error}")
-            logger.exception("AI error details")
-            raise HTTPException(status_code=500, detail=f"AI error: {completion.error}")
-
-        if not completion.choices or not completion.choices[0].message:
+            ]
+        }
+        
+        openrouter_headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "http://localhost:8081",
+            "X-Title": "NutriGuard",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as http_client:
+            ai_response = await http_client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=openrouter_headers,
+                json=openrouter_payload
+            )
+            
+        logger.info(f"OpenRouter response status: {ai_response.status_code}")
+        
+        if ai_response.status_code != 200:
+            logger.error(f"OpenRouter API error: {ai_response.text}")
+            raise HTTPException(status_code=500, detail=f"AI error: {ai_response.text}")
+        
+        ai_result = ai_response.json()
+        logger.info(f"AI completion preview: {summarize(ai_result)}")
+        
+        if "error" in ai_result:
+            logger.error(f"AI returned error: {ai_result['error']}")
+            raise HTTPException(status_code=500, detail=f"AI error: {ai_result['error']}")
+        
+        if not ai_result.get("choices") or not ai_result["choices"][0].get("message"):
             logger.error("AI response missing choices/message")
             raise HTTPException(status_code=500, detail="Invalid response from AI model")
-
-        response_text = completion.choices[0].message.content
+        
+        response_text = ai_result["choices"][0]["message"].get("content", "")
         if not response_text:
             response_text = "Unable to identify item in the image."
 
@@ -1405,42 +1426,63 @@ async def identify_raw_ingredients(request: ImageRequest, authorization: Optiona
         filters_line = f"Default filters to respect: times={defaults['times']}, age={defaults['age']}, diabetic={defaults['diabetic']}."
         ai_prompt = f"{context_str}\n{filters_line}\n\nAnalyze this image and identify all raw ingredients visible. Then suggest 3-5 delicious INDIAN dishes that can be made using these ingredients, prioritizing traditional and popular Indian cuisine recipes that match the filters. Order them by relevance to the user's needs (considering time of day and health requirements). For EACH dish, explain WHY it's a good choice for this user and why it's ranked in this position. Respond ONLY with valid JSON in this exact format:\n{{\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"dishes\": [\n    {{\"name\": \"Dish Name\", \"description\": \"Brief description of the dish\", \"justification\": \"Explain why this dish is ranked here for this user - consider their health needs (diabetic status), time of day appropriateness, and nutritional benefits over other options\"}},\n    ...\n  ]\n}}\n\nIf no ingredients are visible, return: {{\"ingredients\": [], \"dishes\": []}}"
         
-        # For raw-ingredients use the configurable OpenRouter image model and disable reasoning
+        # For raw-ingredients use the configurable OpenRouter image model via direct HTTP
         image_model = os.getenv("OPENROUTER_IMAGE_MODEL", OPENROUTER_IMAGE_MODEL)
         logger.info("Calling image model for raw-ingredients: %s", image_model)
-        completion = client.chat.completions.create(
-            extra_headers={
-                "HTTP-Referer": "http://localhost:8081",
-                "X-Title": "NutriGuard",
-            },
-            extra_body={"reasoning": {"enabled": False}},
-            model=image_model,
-            messages=[
-                {"role": "system", "content": "You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Required JSON shape: {\"ingredients\": [\"ing1\", ...], \"dishes\": [{\"name\": \"Dish\", \"description\": \"...\", \"justification\": \"...\"}]}. If no ingredients, return {\"ingredients\": [], \"dishes\": []}."},
+        
+        openrouter_payload = {
+            "model": image_model,
+            "messages": [
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": ai_prompt
+                            "text": f"You are an image recognition assistant. Respond ONLY with valid JSON and NOTHING else. Required JSON shape: {{\"ingredients\": [\"ing1\", ...], \"dishes\": [{{\"name\": \"Dish\", \"description\": \"...\", \"justification\": \"...\"}}]}}. If no ingredients, return {{\"ingredients\": [], \"dishes\": []}}. {ai_prompt}"
                         },
-                        {"type": "image_url", "image_url": {"url": data_uri}}
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_uri
+                            }
+                        }
                     ]
                 }
-            ],
-        )
-
-        logger.info(f"[identify-raw-ingredients] AI completion preview: {summarize(completion)}")
-
-        if getattr(completion, "error", None):
-            logger.error(f"[identify-raw-ingredients] AI error: {completion.error}")
-            raise HTTPException(status_code=500, detail=f"AI error: {completion.error}")
-
-        if not completion.choices or not completion.choices[0].message:
+            ]
+        }
+        
+        openrouter_headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "http://localhost:8081",
+            "X-Title": "NutriGuard",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as http_client:
+            ai_response = await http_client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=openrouter_headers,
+                json=openrouter_payload
+            )
+        
+        logger.info(f"[identify-raw-ingredients] OpenRouter response status: {ai_response.status_code}")
+        
+        if ai_response.status_code != 200:
+            logger.error(f"[identify-raw-ingredients] OpenRouter API error: {ai_response.text}")
+            raise HTTPException(status_code=500, detail=f"AI error: {ai_response.text}")
+        
+        ai_result = ai_response.json()
+        logger.info(f"[identify-raw-ingredients] AI completion preview: {summarize(ai_result)}")
+        
+        if "error" in ai_result:
+            logger.error(f"[identify-raw-ingredients] AI error: {ai_result['error']}")
+            raise HTTPException(status_code=500, detail=f"AI error: {ai_result['error']}")
+        
+        if not ai_result.get("choices") or not ai_result["choices"][0].get("message"):
             logger.error("[identify-raw-ingredients] AI response missing choices/message")
             raise HTTPException(status_code=500, detail="Invalid response from AI model")
-
-        response_text = completion.choices[0].message.content
+        
+        response_text = ai_result["choices"][0]["message"].get("content", "")
         if not response_text:
             response_text = '{"ingredients": [], "dishes": []}'
 
