@@ -29,6 +29,7 @@ const Dashboard = () => {
     const [barWidth, setBarWidth] = useState(0);
     const pointerX = useRef(new Animated.Value(0)).current;
     const [weeklyStatus, setWeeklyStatus] = useState<WeekDay[]>([]);
+    const [targets, setTargets] = useState<{ calories: number; protein: number; carbs: number; fat: number; maxSugar: number } | null>(null);
 
     const fetchProfileForBmi = async () => {
         try {
@@ -119,6 +120,27 @@ const Dashboard = () => {
         }
     }, []);
 
+    const loadTargets = useCallback(async () => {
+        try {
+            const stored = await AsyncStorage.getItem('dailyTarget');
+            if (stored) {
+                const j = JSON.parse(stored);
+                setTargets({
+                    calories: Number(j.calories || 2500),
+                    protein: Number(j.protein || 150),
+                    carbs: Number(j.carbs || 300),
+                    fat: Number(j.fat || 70),
+                    maxSugar: Number(j.maxSugar || 50),
+                });
+            } else {
+                setTargets(null);
+            }
+        } catch (e) {
+            console.warn('[dashboard] failed loading targets', e);
+            setTargets(null);
+        }
+    }, []);
+
     // Reload totals when the screen is focused so updates from FoodAdd are picked up
     useFocusEffect(
         useCallback(() => {
@@ -126,15 +148,16 @@ const Dashboard = () => {
             loadUser();
             fetchProfileForBmi();
             fetchWeeklyStatus();
-        }, [loadTotals])
+            loadTargets();
+        }, [loadTotals, loadTargets])
     );
 
     // Arbitrary daily goals (adjust as needed)
-    const calorieGoal = 2500; // kcal
-    const proteinGoal = 150; // grams
-    const carbsGoal = 300; // grams
-    const fatGoal = 70; // grams
-    const sugarGoal = 30; // grams
+    const calorieGoal = targets?.calories ?? 2500; // kcal
+    const proteinGoal = targets?.protein ?? 150; // grams
+    const carbsGoal = targets?.carbs ?? 300; // grams
+    const fatGoal = targets?.fat ?? 70; // grams
+    const sugarGoal = targets?.maxSugar ?? 50; // grams
     const fiberGoal = 25; // grams
 
     const calorieFill = Math.min(100, (totals.calories / calorieGoal) * 100) || 0;

@@ -3,6 +3,7 @@ import { View, Text, TextInput, StyleSheet, Alert, ScrollView, TouchableOpacity,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getMacroPlan } from '../utils/api';
 
 export default function UserProfile() {
   const [token, setToken] = useState<string | null>(null);
@@ -68,6 +69,30 @@ export default function UserProfile() {
     } catch (e) {
       console.error('[profile] save exception', e);
       Alert.alert('Error', String(e));
+    }
+  };
+
+  const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
+  const [activity, setActivity] = useState<'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete'>('sedentary');
+
+  const handleCalculatePlan = async () => {
+    try {
+      if (!profile || !profile.weight || !profile.height || !profile.age || !profile.gender) {
+        return Alert.alert('Missing info', 'Please fill weight, height, age, and gender.');
+      }
+      const resp = await getMacroPlan({
+        weightKg: Number(profile.weight),
+        heightCm: Number(profile.height),
+        age: Number(profile.age),
+        sex: String(profile.gender).toLowerCase().startsWith('m') ? 'male' : 'female',
+        goal,
+        activityLevel: activity,
+      });
+      await AsyncStorage.setItem('dailyTarget', JSON.stringify(resp));
+      Alert.alert('Daily target set', `Calories: ${resp.calories} kcal`);
+    } catch (e: any) {
+      console.warn('[macro] failed', e);
+      Alert.alert('Error', String(e?.message || e));
     }
   };
 
@@ -253,6 +278,47 @@ export default function UserProfile() {
                 />
               </View>
             </View>
+          </View>
+
+          {/* Goals & Activity Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <MaterialIcons name="flag" size={24} color="#577590" />
+              <Text style={styles.cardTitle}>Goal & Activity</Text>
+            </View>
+
+            <Text style={styles.label}>Goal</Text>
+            <View style={styles.genderContainer}>
+              {([
+                { k: 'lose', label: 'Lose' },
+                { k: 'maintain', label: 'Maintain' },
+                { k: 'gain', label: 'Gain' },
+              ] as const).map((g) => (
+                <Pressable key={g.k} style={[styles.genderButton, goal === g.k && styles.genderButtonActive]} onPress={() => setGoal(g.k)}>
+                  <Text style={[styles.genderButtonText, goal === g.k && styles.genderButtonTextActive]}>{g.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { marginTop: 12 }]}>Activity Level</Text>
+            <View style={styles.genderContainer}>
+              {([
+                { k: 'sedentary', label: 'Sedentary' },
+                { k: 'light', label: 'Light' },
+                { k: 'moderate', label: 'Moderate' },
+                { k: 'very_active', label: 'Very Active' },
+                { k: 'athlete', label: 'Athlete' },
+              ] as const).map((a) => (
+                <Pressable key={a.k} style={[styles.genderButton, activity === a.k && styles.genderButtonActive]} onPress={() => setActivity(a.k)}>
+                  <Text style={[styles.genderButtonText, activity === a.k && styles.genderButtonTextActive]}>{a.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <TouchableOpacity style={[styles.saveButton, { marginTop: 12 }]} onPress={handleCalculatePlan}>
+              <MaterialIcons name="calculate" size={20} color="#fff" />
+              <Text style={styles.saveButtonText}>Calculate Daily Target</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Health Card */}

@@ -251,6 +251,81 @@ class ImageRequest(BaseModel):
     image_url: str  # Now expects a URL to the image
 
 
+# --- Macro plan calculation (BMR/TDEE/macros) ---
+class MacroPlanInput(BaseModel):
+    weightKg: float
+    heightCm: float
+    age: int
+    sex: str  # 'male' | 'female'
+    goal: str  # 'lose' | 'maintain' | 'gain'
+    activityLevel: str  # 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete'
+
+
+def _activity_factor(level: str) -> float:
+    m = {
+        'sedentary': 1.2,
+        'light': 1.375,
+        'moderate': 1.55,
+        'very_active': 1.725,
+        'athlete': 1.9,
+    }
+    return m.get((level or '').lower(), 1.2)
+
+
+def _calc_bmr(weight: float, height: float, age: int, sex: str) -> float:
+    is_male = (sex or '').lower().startswith('m')
+    if is_male:
+        return 10 * weight + 6.25 * height - 5 * age + 5
+    return 10 * weight + 6.25 * height - 5 * age - 161
+
+
+def _adjust_for_goal(tdee: float, goal: str) -> float:
+    g = (goal or 'maintain').lower()
+    if g == 'lose':
+        return max(0, tdee - 400)
+    if g == 'gain':
+        return tdee + 250
+    return tdee
+
+
+@app.post('/macro-plan')
+def macro_plan(input: MacroPlanInput):
+    try:
+        # Basic input sanity
+        if input.weightKg <= 0 or input.heightCm <= 0 or input.age <= 0:
+            raise HTTPException(status_code=400, detail='Invalid anthropometrics')
+
+        bmr = _calc_bmr(input.weightKg, input.heightCm, input.age, input.sex)
+        tdee = bmr * _activity_factor(input.activityLevel)
+        target_cal = _adjust_for_goal(tdee, input.goal)
+
+        protein_grams = max(0.0, input.weightKg * 1.6)
+        protein_cals = protein_grams * 4
+
+        fat_cals = target_cal * 0.25
+        fat_grams = fat_cals / 9
+
+        carb_cals = max(0.0, target_cal - (protein_cals + fat_cals))
+        carb_grams = carb_cals / 4
+
+        max_sugar_grams = (target_cal * 0.10) / 4
+
+        return {
+            'calories': int(round(target_cal)),
+            'protein': int(round(protein_grams)),
+            'fat': int(round(fat_grams)),
+            'carbs': int(round(carb_grams)),
+            'maxSugar': int(round(max_sugar_grams)),
+            'bmr': int(round(bmr)),
+            'tdee': int(round(tdee)),
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception('Failed to compute macro plan')
+        raise HTTPException(status_code=500, detail='Macro plan failed')
+
+
 def _build_public_image_url(filename: str, request: Request) -> str:
     """Build a public URL for a file in /public that is reachable by the client.
     Prefer configured PUBLIC_URL when it does not point to localhost; otherwise fallback to request.base_url.
