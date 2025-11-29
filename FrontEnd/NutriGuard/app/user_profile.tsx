@@ -87,6 +87,7 @@ export default function UserProfile() {
         sex: String(profile.gender).toLowerCase().startsWith('m') ? 'male' : 'female',
         goal,
         activityLevel: activity,
+        isDiabetic: !!profile.is_diabetic,
       });
       const targetsToStore = {
         calories: resp.calories,
@@ -94,6 +95,7 @@ export default function UserProfile() {
         fat: resp.fat,
         carbs: resp.carbs,
         maxSugar: resp.maxSugar,
+        fiberTarget: resp.fiberTarget,
       };
       await AsyncStorage.setItem('dailyTarget', JSON.stringify(targetsToStore));
       // Persist to backend if token available

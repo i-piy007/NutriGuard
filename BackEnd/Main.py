@@ -200,7 +200,8 @@ def create_db():
             'target_protein': 'REAL',
             'target_carbs': 'REAL',
             'target_fat': 'REAL',
-            'target_max_sugar': 'REAL'
+            'target_max_sugar': 'REAL',
+            'target_fiber': 'REAL'
         }
         cur.execute("PRAGMA table_info(users)")
         cols_targets = [r[1] for r in cur.fetchall()]
@@ -277,6 +278,7 @@ class MacroPlanInput(BaseModel):
     sex: str  # 'male' | 'female'
     goal: str  # 'lose' | 'maintain' | 'gain'
     activityLevel: str  # 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete'
+    isDiabetic: Optional[bool] = False  # diabetic mode changes carb/sugar/fiber targets
 
 
 def _activity_factor(level: str) -> float:
@@ -317,16 +319,28 @@ def macro_plan(input: MacroPlanInput):
         tdee = bmr * _activity_factor(input.activityLevel)
         target_cal = _adjust_for_goal(tdee, input.goal)
 
+        # Protein: same for diabetic and non-diabetic (1.6 g/kg)
         protein_grams = max(0.0, input.weightKg * 1.6)
         protein_cals = protein_grams * 4
 
-        fat_cals = target_cal * 0.25
-        fat_grams = fat_cals / 9
+        diabetic = bool(input.isDiabetic)
 
-        carb_cals = max(0.0, target_cal - (protein_cals + fat_cals))
-        carb_grams = carb_cals / 4
-
-        max_sugar_grams = (target_cal * 0.10) / 4
+        if diabetic:
+            # Diabetic mode: carbs capped at 40% of calories, fat ~30%, sugar max 20g, fiber 30g
+            carb_cals = target_cal * 0.40
+            carb_grams = carb_cals / 4
+            fat_cals = target_cal * 0.30
+            fat_grams = fat_cals / 9
+            max_sugar_grams = 20  # strict limit for diabetics
+            fiber_target = 30
+        else:
+            # Normal mode: fat 25%, carbs = remainder, sugar <10% of cals
+            fat_cals = target_cal * 0.25
+            fat_grams = fat_cals / 9
+            carb_cals = max(0.0, target_cal - (protein_cals + fat_cals))
+            carb_grams = carb_cals / 4
+            max_sugar_grams = (target_cal * 0.10) / 4
+            fiber_target = 25
 
         return {
             'calories': int(round(target_cal)),
@@ -334,8 +348,10 @@ def macro_plan(input: MacroPlanInput):
             'fat': int(round(fat_grams)),
             'carbs': int(round(carb_grams)),
             'maxSugar': int(round(max_sugar_grams)),
+            'fiberTarget': fiber_target,
             'bmr': int(round(bmr)),
             'tdee': int(round(tdee)),
+            'isDiabetic': diabetic,
         }
     except HTTPException:
         raise
@@ -350,6 +366,7 @@ class UserTargetsPayload(BaseModel):
     carbs: float
     fat: float
     maxSugar: float
+    fiberTarget: Optional[float] = 25.0
 
 
 @app.get('/user/targets')
@@ -360,10 +377,10 @@ def get_user_targets(authorization: Optional[str] = Header(None)):
     user_id = int(payload.get('user_id'))
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT target_calories, target_protein, target_carbs, target_fat, target_max_sugar FROM users WHERE id = ?', (user_id,))
+    cur.execute('SELECT target_calories, target_protein, target_carbs, target_fat, target_max_sugar, target_fiber FROM users WHERE id = ?', (user_id,))
     row = cur.fetchone()
     conn.close()
-    if not row or all(v is None for v in row):
+    if not row or all(v is None for v in row[:5]):
         raise HTTPException(status_code=404, detail='Targets not set')
     return {
         'calories': row[0],
@@ -371,6 +388,7 @@ def get_user_targets(authorization: Optional[str] = Header(None)):
         'carbs': row[2],
         'fat': row[3],
         'maxSugar': row[4],
+        'fiberTarget': row[5] if row[5] is not None else 25.0,
     }
 
 
@@ -383,8 +401,8 @@ def save_user_targets(req: UserTargetsPayload, authorization: Optional[str] = He
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     try:
-        cur.execute('UPDATE users SET target_calories = ?, target_protein = ?, target_carbs = ?, target_fat = ?, target_max_sugar = ? WHERE id = ?', (
-            req.calories, req.protein, req.carbs, req.fat, req.maxSugar, user_id
+        cur.execute('UPDATE users SET target_calories = ?, target_protein = ?, target_carbs = ?, target_fat = ?, target_max_sugar = ?, target_fiber = ? WHERE id = ?', (
+            req.calories, req.protein, req.carbs, req.fat, req.maxSugar, req.fiberTarget, user_id
         ))
         conn.commit()
     except Exception:

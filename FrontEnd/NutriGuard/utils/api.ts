@@ -5,6 +5,7 @@ export type MacroPlanInput = {
   sex: 'male' | 'female';
   goal: 'lose' | 'maintain' | 'gain';
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete';
+  isDiabetic?: boolean;
 };
 
 export type MacroPlanResponse = {
@@ -13,8 +14,10 @@ export type MacroPlanResponse = {
   fat: number;
   carbs: number;
   maxSugar: number;
+  fiberTarget: number;
   bmr: number;
   tdee: number;
+  isDiabetic?: boolean;
 };
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://nutriguard-n98n.onrender.com';
@@ -39,6 +42,7 @@ export type UserTargets = {
   fat: number;
   carbs: number;
   maxSugar: number;
+  fiberTarget?: number;
 };
 
 export async function getUserTargets(token: string): Promise<UserTargets | null> {

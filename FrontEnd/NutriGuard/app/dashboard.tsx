@@ -151,6 +151,7 @@ const Dashboard = () => {
                     carbs: Number(j.carbs || 300),
                     fat: Number(j.fat || 70),
                     maxSugar: Number(j.maxSugar || 50),
+                    fiberTarget: Number(j.fiberTarget || 25),
                 });
             } else {
                 setTargets(null);
@@ -180,7 +181,7 @@ const Dashboard = () => {
     const carbsGoal = targets?.carbs ?? 300; // grams
     const fatGoal = targets?.fat ?? 70; // grams
     const sugarGoal = targets?.maxSugar ?? 50; // grams
-    const fiberGoal = 25; // grams
+    const fiberGoal = targets?.fiberTarget ?? 25; // grams
 
     const calorieFill = Math.min(100, (totals.calories / calorieGoal) * 100) || 0;
     const proteinFill = Math.min(100, (totals.protein / proteinGoal) * 100) || 0;
