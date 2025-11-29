@@ -194,13 +194,6 @@ def create_db():
             except Exception:
                 logger.exception("Failed to add goal_achieved column to metrics")
         conn.commit()
-    except Exception:
-        logger.exception('Error migrating/ensuring username column')
-    finally:
-        conn.close()
-
-
-create_db()
         # Ensure macro target columns exist (persisted daily plan)
         target_cols = {
             'target_calories': 'REAL',
@@ -219,6 +212,13 @@ create_db()
                     logger.info(f"Added target column {col} to users table")
                 except Exception:
                     logger.exception(f"Failed adding target column {col}")
+    except Exception:
+        logger.exception('Error migrating/ensuring username column')
+    finally:
+        conn.close()
+
+
+create_db()
 
 # Dev-only admin bypass: only enable if DEV_ADMIN_BYPASS env var is set to '1'
 DEV_ADMIN_BYPASS = os.getenv('DEV_ADMIN_BYPASS', '0') == '1'
