@@ -34,8 +34,8 @@ logger.info(f"SPOONACULAR_API_KEY set: {bool(SPOONACULAR_API_KEY)}")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
-# Image model selection (make configurable via env)
-OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "openrouter/bert-nebulon-alpha")
+# Image model selection (make configurable via env) - using free Mistral vision model
+OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "mistralai/mistral-small-3.1-24b-instruct:free")
 logger.info(f"OPENROUTER_IMAGE_MODEL set: {OPENROUTER_IMAGE_MODEL}")
 # JWT secret for token signing
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_secret")

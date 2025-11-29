@@ -145,14 +145,19 @@ const Dashboard = () => {
             const stored = await AsyncStorage.getItem('dailyTarget');
             if (stored) {
                 const j = JSON.parse(stored);
-                setTargets({
-                    calories: Number(j.calories || 2500),
-                    protein: Number(j.protein || 150),
-                    carbs: Number(j.carbs || 300),
-                    fat: Number(j.fat || 70),
-                    maxSugar: Number(j.maxSugar || 50),
-                    fiberTarget: Number(j.fiberTarget || 25),
-                });
+                // Only use stored targets if calories is present (indicates valid saved targets)
+                if (j.calories) {
+                    setTargets({
+                        calories: Number(j.calories),
+                        protein: Number(j.protein || 0),
+                        carbs: Number(j.carbs || 0),
+                        fat: Number(j.fat || 0),
+                        maxSugar: Number(j.maxSugar || 0),
+                        fiberTarget: Number(j.fiberTarget || 25),
+                    });
+                } else {
+                    setTargets(null);
+                }
             } else {
                 setTargets(null);
             }
