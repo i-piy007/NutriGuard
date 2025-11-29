@@ -30,7 +30,7 @@ const Dashboard = () => {
     const [barWidth, setBarWidth] = useState(0);
     const pointerX = useRef(new Animated.Value(0)).current;
     const [weeklyStatus, setWeeklyStatus] = useState<WeekDay[]>([]);
-    const [targets, setTargets] = useState<{ calories: number; protein: number; carbs: number; fat: number; maxSugar: number } | null>(null);
+    const [targets, setTargets] = useState<{ calories: number; protein: number; carbs: number; fat: number; maxSugar: number; fiberTarget?: number } | null>(null);
     const [targetsLoading, setTargetsLoading] = useState(true);
     const [profile, setProfile] = useState<any | null>(null);
     // Dashboard no longer manages goal/activity; those live in user_profile.

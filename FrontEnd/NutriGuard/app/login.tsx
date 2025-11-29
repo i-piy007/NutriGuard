@@ -3,6 +3,7 @@ import { View, TextInput, Button, StyleSheet, Text, Alert } from 'react-native';
 import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { getUserTargets } from '../utils/api';
 
 export default function LoginScreen() {
   // Keep only name and password as requested
@@ -63,9 +64,10 @@ export default function LoginScreen() {
 
   const handleLogout = async () => {
     try {
-      console.log('[login] logout: clearing token and local totals');
+      console.log('[login] logout: clearing token, local totals, and daily targets');
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('nutritionTotals');
+      await AsyncStorage.removeItem('dailyTarget');
       setIsLoggedIn(false);
       setCurrentUser(null);
       // navigate back to login (replace to avoid back navigation)
@@ -120,6 +122,16 @@ export default function LoginScreen() {
       // Check if profile is complete
       const isComplete = await checkProfileCompleteness(j.token);
       if (isComplete) {
+        // Pre-fetch targets before navigating to dashboard
+        try {
+          const targets = await getUserTargets(j.token);
+          if (targets) {
+            await AsyncStorage.setItem('dailyTarget', JSON.stringify(targets));
+            console.log('[login] pre-fetched targets after register:', targets);
+          }
+        } catch (e) {
+          console.warn('[login] failed to pre-fetch targets after register', e);
+        }
         router.replace('/dashboard');
       } else {
         router.replace('/onboarding');
@@ -179,6 +191,16 @@ export default function LoginScreen() {
       // Check if profile is complete
       const isComplete = await checkProfileCompleteness(j.token);
       if (isComplete) {
+        // Pre-fetch targets before navigating to dashboard
+        try {
+          const targets = await getUserTargets(j.token);
+          if (targets) {
+            await AsyncStorage.setItem('dailyTarget', JSON.stringify(targets));
+            console.log('[login] pre-fetched targets after login:', targets);
+          }
+        } catch (e) {
+          console.warn('[login] failed to pre-fetch targets after login', e);
+        }
         router.replace('/dashboard');
       } else {
         router.replace('/onboarding');
