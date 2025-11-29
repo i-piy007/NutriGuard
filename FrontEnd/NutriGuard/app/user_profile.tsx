@@ -114,6 +114,7 @@ export default function UserProfile() {
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('nutritionTotals');
+    await AsyncStorage.removeItem('dailyTarget');
     router.replace('/login');
   };
 
