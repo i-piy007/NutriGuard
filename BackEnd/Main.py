@@ -201,6 +201,24 @@ def create_db():
 
 
 create_db()
+        # Ensure macro target columns exist (persisted daily plan)
+        target_cols = {
+            'target_calories': 'REAL',
+            'target_protein': 'REAL',
+            'target_carbs': 'REAL',
+            'target_fat': 'REAL',
+            'target_max_sugar': 'REAL'
+        }
+        cur.execute("PRAGMA table_info(users)")
+        cols_targets = [r[1] for r in cur.fetchall()]
+        for col, coltype in target_cols.items():
+            if col not in cols_targets:
+                try:
+                    cur.execute(f"ALTER TABLE users ADD COLUMN {col} {coltype}")
+                    conn.commit()
+                    logger.info(f"Added target column {col} to users table")
+                except Exception:
+                    logger.exception(f"Failed adding target column {col}")
 
 # Dev-only admin bypass: only enable if DEV_ADMIN_BYPASS env var is set to '1'
 DEV_ADMIN_BYPASS = os.getenv('DEV_ADMIN_BYPASS', '0') == '1'
@@ -319,6 +337,52 @@ def macro_plan(input: MacroPlanInput):
             'bmr': int(round(bmr)),
             'tdee': int(round(tdee)),
         }
+        calories: float
+        protein: float
+        carbs: float
+        fat: float
+        maxSugar: float
+
+    @app.get('/user/targets')
+    def get_user_targets(authorization: Optional[str] = Header(None)):
+        payload = get_user_from_auth_header(authorization)
+        if not payload:
+            raise HTTPException(status_code=401, detail='Missing or invalid token')
+        user_id = int(payload.get('user_id'))
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('SELECT target_calories, target_protein, target_carbs, target_fat, target_max_sugar FROM users WHERE id = ?', (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row or all(v is None for v in row):
+            raise HTTPException(status_code=404, detail='Targets not set')
+        return {
+            'calories': row[0],
+            'protein': row[1],
+            'carbs': row[2],
+            'fat': row[3],
+            'maxSugar': row[4],
+        }
+
+    @app.post('/user/targets')
+    def save_user_targets(req: UserTargetsPayload, authorization: Optional[str] = Header(None)):
+        payload = get_user_from_auth_header(authorization)
+        if not payload:
+            raise HTTPException(status_code=401, detail='Missing or invalid token')
+        user_id = int(payload.get('user_id'))
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        try:
+            cur.execute('UPDATE users SET target_calories = ?, target_protein = ?, target_carbs = ?, target_fat = ?, target_max_sugar = ? WHERE id = ?', (
+                req.calories, req.protein, req.carbs, req.fat, req.maxSugar, user_id
+            ))
+            conn.commit()
+        except Exception:
+            logger.exception('Failed saving user targets')
+            raise HTTPException(status_code=500, detail='Failed to save targets')
+        finally:
+            conn.close()
+        return {'status': 'ok'}
     except HTTPException:
         raise
     except Exception:

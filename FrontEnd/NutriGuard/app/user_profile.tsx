@@ -3,7 +3,7 @@ import { View, Text, TextInput, StyleSheet, Alert, ScrollView, TouchableOpacity,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { getMacroPlan } from '../utils/api';
+import { getMacroPlan, saveUserTargets } from '../utils/api';
 
 export default function UserProfile() {
   const [token, setToken] = useState<string | null>(null);
@@ -88,8 +88,21 @@ export default function UserProfile() {
         goal,
         activityLevel: activity,
       });
-      await AsyncStorage.setItem('dailyTarget', JSON.stringify(resp));
+      const targetsToStore = {
+        calories: resp.calories,
+        protein: resp.protein,
+        fat: resp.fat,
+        carbs: resp.carbs,
+        maxSugar: resp.maxSugar,
+      };
+      await AsyncStorage.setItem('dailyTarget', JSON.stringify(targetsToStore));
+      // Persist to backend if token available
+      if (token) {
+        await saveUserTargets(token, targetsToStore);
+      }
       Alert.alert('Daily target set', `Calories: ${resp.calories} kcal`);
+      // After first calculation (or recalculation), navigate back to dashboard
+      router.replace('/dashboard');
     } catch (e: any) {
       console.warn('[macro] failed', e);
       Alert.alert('Error', String(e?.message || e));

@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from 'expo-router';
 import { Buffer } from 'buffer';
 import { styleText } from 'util';
+import { getMacroPlan, getUserTargets } from '../utils/api';
 
 type WeekDay = {
     day: string;
@@ -30,6 +31,9 @@ const Dashboard = () => {
     const pointerX = useRef(new Animated.Value(0)).current;
     const [weeklyStatus, setWeeklyStatus] = useState<WeekDay[]>([]);
     const [targets, setTargets] = useState<{ calories: number; protein: number; carbs: number; fat: number; maxSugar: number } | null>(null);
+    const [targetsLoading, setTargetsLoading] = useState(true);
+    const [profile, setProfile] = useState<any | null>(null);
+    // Dashboard no longer manages goal/activity; those live in user_profile.
 
     const fetchProfileForBmi = async () => {
         try {
@@ -38,6 +42,7 @@ const Dashboard = () => {
             const resp = await fetch('https://nutriguard-n98n.onrender.com/user/profile', { headers: { Authorization: `Bearer ${token}` } });
             if (!resp.ok) return;
             const j = await resp.json();
+            setProfile(j);
             const h = j.height; // in cm
             const w = j.weight; // in kg
             if (h && w) {
@@ -122,6 +127,21 @@ const Dashboard = () => {
 
     const loadTargets = useCallback(async () => {
         try {
+            const token = await AsyncStorage.getItem('token');
+            // Try backend first if token exists
+            if (token) {
+                try {
+                    const remote = await getUserTargets(token);
+                    if (remote) {
+                        setTargets(remote);
+                        await AsyncStorage.setItem('dailyTarget', JSON.stringify(remote));
+                        setTargetsLoading(false);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[dashboard] remote targets fetch failed, falling back to local', e);
+                }
+            }
             const stored = await AsyncStorage.getItem('dailyTarget');
             if (stored) {
                 const j = JSON.parse(stored);
@@ -138,6 +158,8 @@ const Dashboard = () => {
         } catch (e) {
             console.warn('[dashboard] failed loading targets', e);
             setTargets(null);
+        } finally {
+            setTargetsLoading(false);
         }
     }, []);
 
@@ -193,8 +215,30 @@ const Dashboard = () => {
         }
     };
 
+    const needsTargets = !targets && !targetsLoading;
+    // Gate only after we've attempted to load targets (avoid redirect loop)
+    useEffect(() => {
+        if (needsTargets) {
+            const t = setTimeout(() => router.replace('/user_profile'), 0);
+            return () => clearTimeout(t);
+        }
+    }, [needsTargets]);
+
+    // Inline calculation removed; handled exclusively in user_profile.
+
     return (
         <View style={styles.container}>
+            {/* Loading or gating states */}
+            {targetsLoading && (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 16, color: '#333' }}>Loading targets…</Text>
+                </View>
+            )}
+            {needsTargets && !targetsLoading && (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 16, color: '#333' }}>Redirecting to Profile to set daily targets…</Text>
+                </View>
+            )}
             {/* Weekly goal status */}
             {weeklyStatus.length > 0 && (
                 <View style={styles.weeklyContainer}>
@@ -435,8 +479,8 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 16,
-        backgroundColor: "#fff",
-        justifyContent: "space-between",
+        backgroundColor: '#fff',
+        justifyContent: 'space-between',
     },
 
     // === Weekly Status ===
@@ -476,21 +520,11 @@ const styles = StyleSheet.create({
 
     // === Top Card ===
     topCard: {
-        backgroundColor: "#fff",
+        backgroundColor: '#fff',
         borderRadius: 20,
         paddingVertical: 30,
-        alignItems: "center",
+        alignItems: 'center',
         marginBottom: 1,
-    },
-    topTitle: {
-        fontSize: 28,
-        fontWeight: "700",
-        color: "#333",
-    },
-    topValue: {
-        fontSize: 20,
-        color: "#555",
-        marginTop: 6,
     },
 
     // === Macro row / circular progress ===
@@ -537,13 +571,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
     },
-
     calorieLabel: {
         fontSize: 22,
         fontWeight: '700',
         color: '#333',
-        marginTop: 10,
-        textAlign: 'center',
+        marginTop: 8,
     },
 
     // === Micro row for sugar & fiber ===
@@ -553,7 +585,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 12,
         paddingHorizontal: 60,
-        gap: 10,
     },
     microItem: {
         alignItems: 'center',
@@ -563,19 +594,19 @@ const styles = StyleSheet.create({
 
     // === Middle Grid ===
     middleGrid: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
         marginBottom: 20,
     },
     gridItem: {
-        width: "30%", // 3 per row
-        backgroundColor: "#f1f1f1",
+        width: '30%',
+        backgroundColor: '#f1f1f1',
         borderRadius: 15,
         paddingVertical: 20,
         marginBottom: 15,
-        alignItems: "center",
-        shadowColor: "#000",
+        alignItems: 'center',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
@@ -583,15 +614,15 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 16,
-        fontWeight: "600",
+        fontWeight: '600',
         marginBottom: 4,
-        color: "#333",
-        textAlign: "center",
+        color: '#333',
+        textAlign: 'center',
     },
     value: {
         fontSize: 14,
-        color: "#666",
-        textAlign: "center",
+        color: '#666',
+        textAlign: 'center',
     },
 
     // === Actions row (three buttons) ===
@@ -601,7 +632,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 15,
         marginBottom: 12,
-        gap: 10,
     },
     actionButton: {
         flex: 1,
@@ -634,59 +664,42 @@ const styles = StyleSheet.create({
         marginTop: 6,
     },
 
-    // === Bottom Card ===
-    bottomCard: {
-        backgroundColor: "#90be6d",
-        borderRadius: 20,
-        paddingVertical: 25,
-        alignItems: "center",
-        shadowColor: "#000",
+    // === Modal styles ===
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalCard: {
+        width: '90%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
         elevation: 4,
     },
-    bottomTitle: {
-        fontSize: 24,
-        fontWeight: "700",
-        color: "#000000",
-    },
-    bottomValue: {
-        fontSize: 18,
-        color: "#000000",
-        marginTop: 6,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modalCard: {
-        width: '100%',
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 18,
-        alignItems: 'center',
-    },
     modalTitle: {
         fontSize: 18,
         fontWeight: '700',
-        marginBottom: 8,
-        color: '#111',
+        color: '#333',
+        marginBottom: 10,
+        textAlign: 'center',
     },
     modalText: {
-        fontSize: 13,
-        color: '#333',
+        fontSize: 14,
+        color: '#555',
         textAlign: 'center',
-        marginVertical: 8,
+        marginBottom: 10,
     },
     modalTextBold: {
-        fontSize: 13,
-        color: '#111',
         fontWeight: '700',
+        color: '#333',
     },
+
     bmiBarContainer: {
         width: '100%',
         height: 36,
