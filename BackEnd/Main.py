@@ -1143,7 +1143,7 @@ async def identify_food(request: ImageRequest):
                     "content": [
                         {
                             "type": "text",
-                            "text": "You are an image recognition assistant. Identify the food items on the plate and estimate serving sizes. Return EXACTLY valid JSON with the shape: {\"items\": [{\"name\": \"<short name>\", \"serving\": \"<brief serving>\"}]}. Do not include background objects or commentary. If no food is visible return {\"items\": []}."
+                            "text": "You are an image recognition assistant. Identify the food items on the plate (try to be specific) and estimate serving sizes. Return EXACTLY valid JSON with the shape: {\"items\": [{\"name\": \"<name>\", \"serving\": \"<brief serving>\"}]}. Do not include background objects or commentary. If no food is visible return {\"items\": []}."
                         },
                         {
                             "type": "image_url",
@@ -1219,10 +1219,18 @@ async def identify_food(request: ImageRequest):
                     for it in parsed_items:
                         try:
                             name = (it.get("name") if isinstance(it, dict) else str(it)).strip()
+                            serving = (it.get("serving") if isinstance(it, dict) else "").strip()
                         except Exception:
                             name = str(it).strip()
+                            serving = ""
                         if name:
-                            items_to_query.append(name)
+                            # Combine serving size with name for more accurate nutrition lookup
+                            # e.g., "1 slice cake" instead of just "cake"
+                            if serving:
+                                query_str = f"{serving} {name}"
+                            else:
+                                query_str = name
+                            items_to_query.append({"name": name, "query": query_str})
                     logger.info(f"Parsed JSON items to query CalorieNinjas: {items_to_query}")
                 else:
                     # Fallback: sanitize the AI response text as before
@@ -1239,30 +1247,32 @@ async def identify_food(request: ImageRequest):
                         it = re.sub(r"\b(piece|pieces|serving|servings|large|small|slice|slices)\b", "", it, flags=re.I)
                         it = it.strip()
                         if it:
-                            items_to_query.append(it)
+                            items_to_query.append({"name": it, "query": it})
                     logger.info(f"Parsed (fallback) items to query CalorieNinjas: {items_to_query}")
 
                 # Store the parsed food names for display
-                identified_food_names = items_to_query.copy()
+                identified_food_names = [item["name"] for item in items_to_query]
 
                 cn_headers = {"X-Api-Key": CALORIENINJAS_API_KEY}
                 all_items = []
                 for item in items_to_query:
+                    query_str = item["query"]
+                    item_name = item["name"]
                     try:
-                        logger.info(f"Querying CalorieNinjas for: '{item}'")
-                        resp = requests.get("https://api.calorieninjas.com/v1/nutrition", params={"query": item}, headers=cn_headers, timeout=15)
-                        logger.info(f"CalorieNinjas status for '{item}': {resp.status_code}")
+                        logger.info(f"Querying CalorieNinjas for: '{query_str}'")
+                        resp = requests.get("https://api.calorieninjas.com/v1/nutrition", params={"query": query_str}, headers=cn_headers, timeout=15)
+                        logger.info(f"CalorieNinjas status for '{query_str}': {resp.status_code}")
                         if resp.status_code == 200:
                             cn_json = resp.json()
-                            logger.info(f"CalorieNinjas preview for '{item}': {summarize(cn_json, max_words=20)}")
+                            logger.info(f"CalorieNinjas preview for '{query_str}': {summarize(cn_json, max_words=20)}")
                             found = cn_json.get("items", []) if isinstance(cn_json, dict) else []
                             for f in found:
-                                f.setdefault("queried_item", item)
+                                f.setdefault("queried_item", item_name)
                             all_items.extend(found)
                         else:
-                            logger.warning(f"CalorieNinjas non-200 for '{item}': {summarize(resp.text, max_words=20)}")
+                            logger.warning(f"CalorieNinjas non-200 for '{query_str}': {summarize(resp.text, max_words=20)}")
                     except Exception:
-                        logger.exception(f"Error querying CalorieNinjas for '{item}'")
+                        logger.exception(f"Error querying CalorieNinjas for '{query_str}'")
 
                 items = all_items
                 # compute totals by summing the returned items
