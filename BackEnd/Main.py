@@ -1195,6 +1195,7 @@ async def identify_food(request: ImageRequest):
 
         # Call CalorieNinjas API for nutrition data
         nutrition_data = None
+        identified_food_names = []  # Store parsed food names for display
         if CALORIENINJAS_API_KEY and response_text != "Unable to identify item in the image.":
             try:
                 # Prefer strict JSON output from the model: try to parse it
@@ -1241,6 +1242,9 @@ async def identify_food(request: ImageRequest):
                             items_to_query.append(it)
                     logger.info(f"Parsed (fallback) items to query CalorieNinjas: {items_to_query}")
 
+                # Store the parsed food names for display
+                identified_food_names = items_to_query.copy()
+
                 cn_headers = {"X-Api-Key": CALORIENINJAS_API_KEY}
                 all_items = []
                 for item in items_to_query:
@@ -1278,7 +1282,13 @@ async def identify_food(request: ImageRequest):
             except Exception as e:
                 logger.exception(f"Error calling nutrition API: {e}")
 
-        return {"item_name": response_text, "nutrition": nutrition_data}
+        # Build a clean display name from identified foods
+        if identified_food_names:
+            display_name = ", ".join(identified_food_names)
+        else:
+            display_name = "Unknown food item"
+        
+        return {"item_name": display_name, "nutrition": nutrition_data}
     except Exception as e:
         logger.exception(f"Error in identify_food: {e}")
         raise HTTPException(status_code=500, detail=str(e))
