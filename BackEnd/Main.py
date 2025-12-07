@@ -1744,7 +1744,7 @@ async def identify_image(request: ImageURLRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Identify the food items on the plate in this image. Return EXACT valid JSON using the schema in the system message. Do not include commentary."},
+                        {"type": "text", "text": "Identify the food items on the plate in this image with quantity data, including approximate serving sizes. Return EXACT valid JSON using the schema in the system message. Do not include commentary."},
                         {"type": "image_url", "image_url": {"url": data_uri}}
                     ]
                 }
