@@ -35,7 +35,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 logger.info(f"PUBLIC_URL set: {PUBLIC_URL}")
 
 # Image model selection (make configurable via env) - using free Gemma 3 4b vision model
-OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "google/gemma-3-4b-it:free")
+OPENROUTER_IMAGE_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "amazon/nova-2-lite-v1:free")
 logger.info(f"OPENROUTER_IMAGE_MODEL set: {OPENROUTER_IMAGE_MODEL}")
 # JWT secret for token signing
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_secret")
