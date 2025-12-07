@@ -61,3 +61,45 @@ Contributing
 License
 - Add a LICENSE file if you plan to open-source this project.
 
+Features
+
+- Frontend (React Native + Expo)
+
+	- Login & onboarding flow
+	- Dashboard with macro summary
+	- Camera-based food scanning
+	- Manual entry & history viewer
+	- Profile & preferences
+	- API client powered by the code in `FrontEnd/NutriGuard/utils/api.ts` (configurable API URL via `EXPO_PUBLIC_API_URL`)
+	- Works on Android, iOS, and web via Expo
+
+- Backend (FastAPI + SQLite)
+
+	- Endpoints (examples):
+		- `POST /macro-plan` — compute macro/calorie plan from anthropometrics
+		- `GET /user/targets` and `POST /user/targets` — save/get user nutrition targets
+		- `/history` — store & fetch user macro logs and scans
+		- `/img/scan` — image → ingredients → nutrition workflow
+		- `POST /admin/bypass` — dev-only admin token creation (requires `DEV_ADMIN_BYPASS=1`)
+	- Authentication via JWT (see `BackEnd/Main.py`)
+	- SQLite persistence: `BackEnd/data.db`
+
+Optional integrations
+
+- OpenRouter / OpenAI: used to refine ingredient text and improve nutrition parsing.
+- CalorieNinjas API: optional nutrition lookup.
+- Spoonacular API: optional fallback / ingredient data.
+
+Notes for maintainers
+
+- Backend dependencies are in `BackEnd/requirements.txt` (FastAPI, Uvicorn, httpx, OpenAI client, etc.).
+- Frontend is an Expo app in `FrontEnd/NutriGuard` — check `package.json` for scripts and dependencies.
+- Configure API keys and `JWT_SECRET` via environment variables before running in production.
+
+Quick link references
+
+- Backend entry: `BackEnd/Main.py`
+- Frontend app root: `FrontEnd/NutriGuard/app`
+- API client: `FrontEnd/NutriGuard/utils/api.ts`
+
+

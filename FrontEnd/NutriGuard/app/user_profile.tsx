@@ -317,19 +317,33 @@ export default function UserProfile() {
             </View>
 
             <Text style={[styles.label, { marginTop: 12 }]}>Activity Level</Text>
-            <View style={styles.genderContainer}>
-              {([
+            {(() => {
+              const activities = [
                 { k: 'sedentary', label: 'Sedentary' },
                 { k: 'light', label: 'Light' },
                 { k: 'moderate', label: 'Moderate' },
                 { k: 'very_active', label: 'Very Active' },
                 { k: 'athlete', label: 'Athlete' },
-              ] as const).map((a) => (
-                <Pressable key={a.k} style={[styles.genderButton, activity === a.k && styles.genderButtonActive]} onPress={() => setActivity(a.k)}>
-                  <Text style={[styles.genderButtonText, activity === a.k && styles.genderButtonTextActive]}>{a.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+              ] as const;
+              return (
+                <>
+                  <View style={styles.activityRow}>
+                    {activities.slice(0, 3).map((a) => (
+                      <Pressable key={a.k} style={[styles.activityButton, activity === a.k && styles.genderButtonActive]} onPress={() => setActivity(a.k)}>
+                        <Text style={[styles.genderButtonText, activity === a.k && styles.genderButtonTextActive]}>{a.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.activityRowCenter}>
+                    {activities.slice(3).map((a) => (
+                      <Pressable key={a.k} style={[styles.activityButton, activity === a.k && styles.genderButtonActive]} onPress={() => setActivity(a.k)}>
+                        <Text style={[styles.genderButtonText, activity === a.k && styles.genderButtonTextActive]}>{a.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              );
+            })()}
 
             <TouchableOpacity style={[styles.saveButton, { marginTop: 12 }]} onPress={handleCalculatePlan}>
               <MaterialIcons name="calculate" size={20} color="#fff" />
@@ -573,6 +587,36 @@ const styles = StyleSheet.create({
   genderButtonTextActive: {
     color: '#90be6d',
     fontWeight: '600',
+  },
+
+  // Activity buttons (separate from gender/goal buttons so many items don't stretch)
+  activityContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    // allow natural sizes and horizontal scrolling if needed
+    alignItems: 'center',
+  },
+  activityButton: {
+    flex: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    minWidth: 78,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  activityRowCenter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
   },
 
   // Stats Row
