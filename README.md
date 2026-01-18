@@ -1,4 +1,7 @@
-<img width="720" height="1600" alt="image" src="https://github.com/user-attachments/assets/6b6a055f-9412-4312-a1d2-1a1f505b8b85" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/6b6a055f-9412-4312-a1d2-1a1f505b8b85" width="500"/>
+</p>
+
 
 # NutriGuard
 
