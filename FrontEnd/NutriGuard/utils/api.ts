@@ -1,3 +1,4 @@
+// NutriGuard API client: typed wrappers around the backend endpoints.
 export type MacroPlanInput = {
   weightKg: number;
   heightCm: number;

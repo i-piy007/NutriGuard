@@ -1,3 +1,4 @@
+# NutriGuard backend: FastAPI service for auth, macro plans, and food scanning.
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
